@@ -1,5 +1,11 @@
-import requests
 from urllib.parse import urlparse
+
+import requests
+from sslyze.concurrent_scanner import ConcurrentScanner, PluginRaisedExceptionScanResult
+from sslyze.plugins.fallback_scsv_plugin import FallbackScsvScanCommand
+from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv30ScanCommand, Tlsv10ScanCommand, \
+    Tlsv11ScanCommand, Tlsv12ScanCommand, Tlsv13ScanCommand
+from sslyze.server_connectivity_tester import ServerConnectivityTester, ServerConnectivityError
 
 
 def save_results(results):
@@ -97,8 +103,102 @@ def determine_hsts_score():
     return -1
 
 
-def determine_tls_score():
-    # TODO
+def get_ssl_server_info(hostname):
+    try:
+        server_tester = ServerConnectivityTester(hostname=hostname)
+        server_info = server_tester.perform(network_timeout=5)
+    except ServerConnectivityError as e:
+        # Could not establish an SSL connection to the server
+        raise RuntimeError(f'Could not connect to {e.server_info.hostname}: {e.error_message}')
+
+    return server_info
+
+
+def get_supported_tls_cipher_suites(hostname):
+    server_info = get_ssl_server_info(hostname)
+    concurrent_scanner = ConcurrentScanner()
+    concurrent_scanner.queue_scan_command(server_info, Sslv20ScanCommand())
+    concurrent_scanner.queue_scan_command(server_info, Sslv30ScanCommand())
+    concurrent_scanner.queue_scan_command(server_info, Tlsv10ScanCommand())
+    concurrent_scanner.queue_scan_command(server_info, Tlsv11ScanCommand())
+    concurrent_scanner.queue_scan_command(server_info, Tlsv12ScanCommand())
+    concurrent_scanner.queue_scan_command(server_info, Tlsv13ScanCommand())
+    concurrent_scanner.queue_scan_command(server_info, FallbackScsvScanCommand())
+
+    for scan_result in concurrent_scanner.get_results():
+        # A scan command can fail (as a bug); it is returned as a PluginRaisedExceptionResult
+        if isinstance(scan_result, PluginRaisedExceptionScanResult):
+            raise RuntimeError(f'Scan command failed: {scan_result.scan_command.get_title()}')
+
+        if isinstance(scan_result.scan_command, Sslv20ScanCommand):
+            accepted_ssl2 = [cipher.name for cipher in scan_result.accepted_cipher_list]
+            denied_ssl2 = [cipher.name for cipher in scan_result.rejected_cipher_list]
+            errored_ssl2 = [cipher.name for cipher in scan_result.errored_cipher_list]
+        if isinstance(scan_result.scan_command, Sslv30ScanCommand):
+            accepted_ssl3 = [cipher.name for cipher in scan_result.accepted_cipher_list]
+            denied_ssl3 = [cipher.name for cipher in scan_result.rejected_cipher_list]
+            errored_ssl3 = [cipher.name for cipher in scan_result.errored_cipher_list]
+        if isinstance(scan_result.scan_command, Tlsv10ScanCommand):
+            accepted_tls10 = [cipher.name for cipher in scan_result.accepted_cipher_list]
+            denied_tls10 = [cipher.name for cipher in scan_result.rejected_cipher_list]
+            errored_tls10 = [cipher.name for cipher in scan_result.errored_cipher_list]
+        if isinstance(scan_result.scan_command, Tlsv11ScanCommand):
+            accepted_tls11 = [cipher.name for cipher in scan_result.accepted_cipher_list]
+            denied_tls11 = [cipher.name for cipher in scan_result.rejected_cipher_list]
+            errored_tls11 = [cipher.name for cipher in scan_result.errored_cipher_list]
+        if isinstance(scan_result.scan_command, Tlsv12ScanCommand):
+            accepted_tls12 = [cipher.name for cipher in scan_result.accepted_cipher_list]
+            denied_tls12 = [cipher.name for cipher in scan_result.rejected_cipher_list]
+            errored_tls12 = [cipher.name for cipher in scan_result.errored_cipher_list]
+        if isinstance(scan_result.scan_command, Tlsv13ScanCommand):
+            accepted_tls13 = [cipher.name for cipher in scan_result.accepted_cipher_list]
+            denied_tls13 = [cipher.name for cipher in scan_result.rejected_cipher_list]
+            errored_tls13 = [cipher.name for cipher in scan_result.errored_cipher_list]
+        if isinstance(scan_result.scan_command, FallbackScsvScanCommand):
+            supports_fallback_scsv = scan_result.supports_fallback_scsv
+
+    return {
+        'accepted_ssl2': accepted_ssl2,
+        'denied_ssl2': denied_ssl2,
+        'errored_ssl2': errored_ssl2,
+        'accepted_ssl3': accepted_ssl3,
+        'denied_ssl3': denied_ssl3,
+        'errored_ssl3': errored_ssl3,
+        'accepted_tls10': accepted_tls10,
+        'denied_tls10': denied_tls10,
+        'errored_tls10': errored_tls10,
+        'accepted_tls11': accepted_tls11,
+        'denied_tls11': denied_tls11,
+        'errored_tls11': errored_tls11,
+        'accepted_tls12': accepted_tls12,
+        'denied_tls12': denied_tls12,
+        'errored_tls12': errored_tls12,
+        'accepted_tls13': accepted_tls13,
+        'denied_tls13': denied_tls13,
+        'errored_tls13': errored_tls13,
+        'supports_fallback_scsv': supports_fallback_scsv
+    }
+
+
+# return -1 if no accepted cipher suites were identified with any TLS version
+# return 0 if SSL 2.0 or 3.0 cipher suites are supported by the server
+# return 1 if weak TLS 1.0 or 1.1 cipher suites are supported by the server
+# or the server is missing TLS Fallback Signaling Cipher Suite Value support
+# return 2 for TLS 1.0 or 1.1 otherwise
+# return 3 for TLS 1.2+
+def determine_tls_score(hostname):
+    supported_cipher_suites = get_supported_tls_cipher_suites(hostname)
+    if supported_cipher_suites['accepted_ssl2'] or supported_cipher_suites['accepted_ssl3']:
+        return 0
+    if supported_cipher_suites['accepted_tls10'] or supported_cipher_suites['accepted_tls11']:
+        weak_cipher_keywords = ['NULL', 'MD5', 'RC4', '3DES', 'EXPORT', 'anon']
+        for accepted_suites in (supported_cipher_suites['accepted_tls10'] + supported_cipher_suites['accepted_tls11']):
+            if not supported_cipher_suites['supports_fallback_scsv'] \
+                    or any(x in accepted_suites for x in weak_cipher_keywords):
+                return 1
+        return 2
+    if supported_cipher_suites['accepted_tls12'] or supported_cipher_suites['accepted_tls13']:
+        return 3
     return -1
 
 
@@ -126,16 +226,13 @@ def determine_http_redirection_score(response):
     return score
 
 
-def get_response(hostname):
-    return requests.get(f'http://{hostname}', timeout=10)
-
-
 def analyze(hostname):
-    response = get_response(hostname)
+    response = requests.get(f'http://{hostname}', timeout=10)
+    redirected_hostname = urlparse(response.url).hostname
     # phase 0
     http_redirection_score = determine_http_redirection_score(response)
     # phase 1
-    tls_score = determine_tls_score()
+    tls_score = determine_tls_score(redirected_hostname)
     # phase 2
     hsts_score = determine_hsts_score()
     hpkp_score = determine_hpkp_score()
@@ -184,8 +281,9 @@ def analyze(hostname):
     save_results(results)
 
 
-analyze('google.com')
-analyze('github.com')
-analyze('vr-bank.de')
-analyze('sparkasse.de')
-analyze('sparkasse-nuernberg.de')
+if __name__ == '__main__':
+    analyze('google.com')
+    analyze('github.com')
+    analyze('vr-bank.de')
+    analyze('sparkasse.de')
+    # analyze('sparkasse-nuernberg.de')
