@@ -1,0 +1,13 @@
+asn1crypto==0.24.0
+certifi==2018.11.29
+cffi==1.12.2
+chardet==3.0.4
+cryptography==2.5
+idna==2.8
+nassl==2.1.2
+pycparser==2.19
+requests==2.21.0
+six==1.12.0
+sslyze==2.0.6
+tls-parser==1.2.1
+urllib3==1.24.1
