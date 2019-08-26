@@ -84,18 +84,26 @@ def determine_x_frame_options_score():
     return -1
 
 
-def determine_x_xss_protection_score():
-    # TODO
-    return -1
+# return 0 if X-XSS-Protection is set to 0
+# return 1 if X-XSS-Protection is absence
+# return 2 if X-XSS-Protection is set to 1
+def determine_x_xss_protection_score(response_headers):
+    xss_protection_header = response_headers['X-XSS-Protection']
+    if xss_protection_header is None:
+        return 1
+    if '0' == xss_protection_header[0]:
+        return 0
+    if '1' == xss_protection_header[0]:
+        return 2
 
 
 # return 1 if X-Content-Type-Options is set to nosniff
 # return 0 otherwise
 def determine_x_content_type_options_score(response_headers):
-    x_content_type_options_header = response_headers['X-Content-Type-Options']
-    if x_content_type_options_header is None:
+    content_type_options_header = response_headers['X-Content-Type-Options']
+    if content_type_options_header is None:
         return 0
-    if 'nosniff'.casefold() == x_content_type_options_header.casefold():
+    if 'nosniff'.casefold() == content_type_options_header.casefold():
         return 1
 
 
