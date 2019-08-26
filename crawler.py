@@ -79,9 +79,17 @@ def determine_x_download_options_score():
     return -1
 
 
-def determine_x_frame_options_score():
-    # TODO
-    return -1
+# return 1 if X-Frame-Options is set to DENY or SAMEORIGIN
+# return 0 otherwise
+def determine_x_frame_options_score(response_header):
+    frame_options_header = response_header['X-Frame-Options']
+    if frame_options_header is None:
+        return 0
+    if 'DENY'.casefold() == frame_options_header.casefold() \
+            or 'SAMEORIGIN'.casefold() == frame_options_header.casefold():
+        return 1
+    else:
+        return 0
 
 
 # return 0 if X-XSS-Protection is set to 0
