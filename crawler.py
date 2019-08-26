@@ -69,9 +69,20 @@ def determine_cookie_security_score():
     return -1
 
 
-def determine_expect_ct_score():
-    # TODO
-    return -1
+# return 0 if Expect-CT header is absent or max-age is missing
+# return 1 if in report-only mode
+# return 2 if in enforce(-and-report)-mode
+def determine_expect_ct_score(response_headers):
+    expect_ct_header = response_headers('Expect-CT')
+    if expect_ct_header is None:
+        return 0
+    if re.search('max-age=(\\d+)', expect_ct_header, flags=re.I) is None:
+        return 0
+    if 'enforce'.casefold() in expect_ct_header.casefold().split(','):
+        return 2
+    if 'report-uri="'.casefold() in expect_ct_header.casefold():
+        return 1
+    return 0
 
 
 # return 1 if X-Download-Options: is set to noopen
@@ -100,7 +111,7 @@ def determine_x_frame_options_score(response_headers):
 
 
 # return 0 if X-XSS-Protection is set to 0
-# return 1 if X-XSS-Protection is absence
+# return 1 if X-XSS-Protection header is absent
 # return 2 if X-XSS-Protection is set to 1
 def determine_x_xss_protection_score(response_headers):
     xss_protection_header = response_headers['X-XSS-Protection']
