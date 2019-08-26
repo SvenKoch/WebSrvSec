@@ -89,9 +89,14 @@ def determine_x_xss_protection_score():
     return -1
 
 
-def determine_x_content_type_options_score():
-    # TODO
-    return -1
+# return 1 if X-Content-Type-Options is set to nosniff
+# return 0 otherwise
+def determine_x_content_type_options_score(response_headers):
+    x_content_type_options_header = response_headers['X-Content-Type-Options']
+    if x_content_type_options_header is None:
+        return 0
+    if 'nosniff'.casefold() == x_content_type_options_header.casefold():
+        return 1
 
 
 # return 0 if no valid HPKP response header is present
