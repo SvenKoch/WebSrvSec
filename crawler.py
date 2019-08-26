@@ -94,32 +94,54 @@ def determine_x_content_type_options_score():
     return -1
 
 
-def determine_hpkp_score():
-    # TODO
-    return -1
-
-
-# return 0 if no valid HSTS response header is present is present
-# return 1 if HSTS response header is present but max-age is lower than 120 days
-# return 2 if HSTS response headers is present and max-age is higher than 120 days
-# add 2 for includeSubdomain option
-# add another 2 for preload option (includeSubdomain is mandatory in this case)
-def determine_hsts_score(response):
-    if 'Strict-Transport-Security' not in response.headers:
+# return 0 if no valid HPKP response header is present
+# return 1 if HPKP response header is present
+# add 1 if max-age is between 15 and 120 days
+# add 2 for includeSubDomains option
+def determine_hpkp_score(response_headers):
+    hpkp_header = response_headers['Public-Key-Pins']
+    if hpkp_header is None:
+        return 0
+    if 'pin-sha256'.casefold() not in hpkp_header.casefold():
         return 0
 
-    max_age_match = re.search('max-age=(\\d+)', response.headers['Strict-Transport-Security'], flags=re.I)
+    max_age_match = re.search('max-age=(\\d+)', hpkp_header, flags=re.I)
     if max_age_match is None:
         return 0
     max_age = int(max_age_match.group(1))
-    if max_age < 10368000:
+    if max_age < 15*24*60*60 or max_age > 120*24*60*60:
         score = 1
     else:
         score = 2
 
-    if 'includeSubdomain' in response.headers['Strict-Transport-Security']:
+    if 'includeSubDomains'.casefold() in hpkp_header.casefold():
         score += 2
-        if 'preload' in response.headers['Strict-Transport-Security']:
+
+    return score
+
+
+# return 0 if no valid HSTS response header is present
+# return 1 if HSTS response header is present but max-age is lower than 120 days
+# return 2 if HSTS response headers is present and max-age is higher than 120 days
+# add 2 for includeSubdomain option
+# add another 2 for preload option (includeSubdomain is mandatory in this case)
+def determine_hsts_score(response_headers):
+    hsts_header = response_headers['Strict-Transport-Security']
+    if hsts_header is None:
+        return 0
+
+    max_age_match = re.search('max-age=(\\d+)', hsts_header, flags=re.I)
+    if max_age_match is None:
+        return 0
+    max_age = int(max_age_match.group(1))
+    if max_age < 120*24*60*60:
+        score = 1
+    else:
+        score = 2
+
+    if 'includeSubDomains'.casefold() in hsts_header.casefold():
+        score += 2
+        if 'preload'.casefold() in hsts_header.casefold():
             score += 2
 
     return score
@@ -250,6 +272,7 @@ def determine_http_redirection_score(response):
 
 def analyze(hostname):
     response = requests.get(f'http://{hostname}', timeout=10)
+    # TODO handle timeout
     redirected_hostname = urlparse(response.url).hostname
     # phase 0
     http_redirection_score = determine_http_redirection_score(response)
@@ -257,7 +280,8 @@ def analyze(hostname):
     tls_score = determine_tls_score(redirected_hostname)
     # phase 2
     response = requests.get(f'https://{redirected_hostname}', timeout=10)
-    hsts_score = determine_hsts_score(response)
+    response_headers = response.headers
+    hsts_score = determine_hsts_score(response_headers)
     hpkp_score = determine_hpkp_score()
     x_content_type_options_score = determine_x_content_type_options_score()
     x_xss_protection_score = determine_x_xss_protection_score()
