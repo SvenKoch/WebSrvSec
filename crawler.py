@@ -2,6 +2,7 @@ import re
 from urllib.parse import urlparse
 
 import requests
+from bs4 import BeautifulSoup
 from sslyze.concurrent_scanner import ConcurrentScanner, PluginRaisedExceptionScanResult
 from sslyze.plugins.fallback_scsv_plugin import FallbackScsvScanCommand
 from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv30ScanCommand, Tlsv10ScanCommand, \
@@ -64,9 +65,50 @@ def determine_cors_score():
     return -1
 
 
-def determine_cookie_security_score():
-    # TODO
-    return -1
+# return 14 if all cookies contain the Secure, HttpOnly and SameSite directive and are set via header
+# subtract 1 for missing SameSite directive
+# subtract 2 for missing HttpOnly directive
+# subtract 4 for missing Secure directive
+# subtract 7 for cookies set via meta tag in HTML source
+def determine_cookie_security_score(response):
+    cookies_set_via_meta_tags = False
+    secure = True
+    http_only = True
+    same_site = True
+    for cookie in response.cookies:
+        if not cookie.secure:
+            secure = False
+        if not cookie.has_nonstandard_attr('HttpOnly'):
+            http_only = False
+        if not cookie.has_nonstandard_attr('SameSite'):
+            same_site = False
+
+    soup = BeautifulSoup(response.text)
+    set_cookie_metas = soup.find_all('meta', attrs={"http-equiv": "Set-Cookie"})
+    if set_cookie_metas:
+        cookies_set_via_meta_tags = True
+    for cookie in set_cookie_metas:
+        match = re.search('content="(.*)"', cookie, re.I)
+        if match:
+            content = match.group(1)
+            split_content = [x.casefold() for x in content.split(';')]
+            if 'Secure'.casefold() not in split_content:
+                secure = False
+            if 'HttpOnly'.casefold() not in split_content:
+                http_only = False
+            if 'SameSite'.casefold() not in split_content:
+                same_site = False
+
+    score = 14
+    if cookies_set_via_meta_tags:
+        score -= 7
+    if not secure:
+        score -= 4
+    if not http_only:
+        score -= 2
+    if not same_site:
+        score -= 1
+    return score
 
 
 # return 0 if Expect-CT header is absent or max-age is missing
@@ -189,7 +231,7 @@ def determine_hsts_score(response_headers):
 def get_ssl_server_info(hostname):
     try:
         server_tester = ServerConnectivityTester(hostname=hostname)
-        server_info = server_tester.perform(network_timeout=5)
+        server_info = server_tester.perform(network_timeout=10)
     except ServerConnectivityError as e:
         # Could not establish an SSL connection to the server
         raise RuntimeError(f'Could not connect to {e.server_info.hostname}: {e.error_message}')
@@ -310,6 +352,7 @@ def determine_http_redirection_score(response):
 
 
 def analyze(hostname):
+    # TODO set user-agent
     response = requests.get(f'http://{hostname}', timeout=10)
     # TODO handle timeout
     redirected_hostname = urlparse(response.url).hostname
@@ -319,16 +362,17 @@ def analyze(hostname):
     tls_score = determine_tls_score(redirected_hostname)
     # phase 2
     response = requests.get(f'https://{redirected_hostname}', timeout=10)
+    # TODO handle timeout
     response_headers = response.headers
     hsts_score = determine_hsts_score(response_headers)
-    hpkp_score = determine_hpkp_score()
-    x_content_type_options_score = determine_x_content_type_options_score()
-    x_xss_protection_score = determine_x_xss_protection_score()
-    x_frame_options_score = determine_x_frame_options_score()
-    x_download_options_score = determine_x_download_options_score()
-    expect_ct_score = determine_expect_ct_score()
+    hpkp_score = determine_hpkp_score(response_headers)
+    x_content_type_options_score = determine_x_content_type_options_score(response_headers)
+    x_xss_protection_score = determine_x_xss_protection_score(response_headers)
+    x_frame_options_score = determine_x_frame_options_score(response_headers)
+    x_download_options_score = determine_x_download_options_score(response_headers)
+    expect_ct_score = determine_expect_ct_score(response_headers)
     # phase 3
-    cookie_security_score = determine_cookie_security_score()
+    cookie_security_score = determine_cookie_security_score(response)
     cors_score = determine_cors_score()
     csp_score = determine_csp_score()
     csrf_score = determine_csrf_score()
