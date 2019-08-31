@@ -60,9 +60,45 @@ def determine_csp_score():
     return -1
 
 
-def determine_cors_score():
-    # TODO
-    return -1
+# return 0 if Access-Control-Allow-Origin header is set to *
+# return 1 if Access-Control-Allow-Origin header is present
+# return 2 if Access-Control-Allow-Origin header is absent
+# add 3 for X-Permitted-Cross-Domain-Policies: none or if neither crossdomain.xml nor clientaccesspolicy.xml are present
+def determine_cors_score(response):
+    access_control_allow_origin_header = response.headers['Access-Control-Allow-Origin']
+    x_permitted_cross_domain_policies_header = response.headers['X-Permitted-Cross-Domain-Policies']
+    x_permitted_cross_domain_policies_set_to_none = False
+    lazy_wildcard = False
+    crossdomain_xml_present = False
+    clientaccesspolicy_xml_present = False
+    if access_control_allow_origin_header and access_control_allow_origin_header == '*':
+        lazy_wildcard = True
+    if x_permitted_cross_domain_policies_header \
+            and x_permitted_cross_domain_policies_header.casefold() == 'none'.casefold():
+        x_permitted_cross_domain_policies_set_to_none = True
+
+    hostname = urlparse(response.url).hostname
+    crossdomain_xml = requests.get(f'https://{hostname}/crossdomain.xml')
+    clientaccesspolicy_xml = requests.get(f'https://{hostname}/clientaccesspolicy.xml')
+
+    if crossdomain_xml.status_code == 200:
+        crossdomain_xml_present = True
+    if clientaccesspolicy_xml.status_code == 200:
+        clientaccesspolicy_xml_present = True
+
+    # TODO nice to have: analyze XML files if present
+
+    if lazy_wildcard:
+        score = 0
+    elif access_control_allow_origin_header:
+        score = 1
+    else:
+        score = 2
+
+    if x_permitted_cross_domain_policies_set_to_none or \
+            (not crossdomain_xml_present and not clientaccesspolicy_xml_present):
+        score += 3
+    return score
 
 
 # return 14 if all cookies contain the Secure, HttpOnly and SameSite directive and are set via header
@@ -373,7 +409,7 @@ def analyze(hostname):
     expect_ct_score = determine_expect_ct_score(response_headers)
     # phase 3
     cookie_security_score = determine_cookie_security_score(response)
-    cors_score = determine_cors_score()
+    cors_score = determine_cors_score(response)
     csp_score = determine_csp_score()
     csrf_score = determine_csrf_score()
     referrer_policy_score = determine_referrer_policy_score()
