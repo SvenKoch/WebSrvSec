@@ -101,7 +101,7 @@ def determine_cors_score(response):
     return score
 
 
-# return 14 if all cookies contain the Secure, HttpOnly and SameSite directive and are set via header
+# return 14 if all cookies contain the Secure, HttpOnly and SameSite=Strict directives and are set via header
 # subtract 1 for missing SameSite directive
 # subtract 2 for missing HttpOnly directive
 # subtract 4 for missing Secure directive
@@ -116,7 +116,7 @@ def determine_cookie_security_score(response):
             secure = False
         if not cookie.has_nonstandard_attr('HttpOnly'):
             http_only = False
-        if not cookie.has_nonstandard_attr('SameSite'):
+        if not cookie.get_nonstandard_attr('SameSite', default='').casefold() == 'Strict'.casefold():
             same_site = False
 
     soup = BeautifulSoup(response.text)
@@ -132,7 +132,7 @@ def determine_cookie_security_score(response):
                 secure = False
             if 'HttpOnly'.casefold() not in split_content:
                 http_only = False
-            if 'SameSite'.casefold() not in split_content:
+            if 'SameSite=Strict'.casefold() not in split_content:
                 same_site = False
 
     score = 14
