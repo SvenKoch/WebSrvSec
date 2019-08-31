@@ -3,6 +3,11 @@ from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, UnexpectedAlertPresentException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 from sslyze.concurrent_scanner import ConcurrentScanner, PluginRaisedExceptionScanResult
 from sslyze.plugins.fallback_scsv_plugin import FallbackScsvScanCommand
 from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv30ScanCommand, Tlsv10ScanCommand, \
@@ -55,9 +60,40 @@ def determine_csrf_score():
     return -1
 
 
-def determine_csp_score():
-    # TODO
-    return -1
+# return -1 on timeout
+# return 0 if no Content Security Policy is found
+# return 1 if evaluation of CSP yields high severity finding(s)
+# return 2 if evaluation of CSP yields medium severity finding(s)
+# return 3 if evaluation of CSP yields possible high severity finding(s)
+# return 4 if evaluation of CSP yields possible medium severity finding(s)
+# return 5 if evaluation of CSP yields no (possibly) negative findings
+def determine_csp_score(hostname):
+    driver = webdriver.Chrome()
+    driver.get('https://csp-evaluator.withgoogle.com')
+    textarea = driver.find_element_by_tag_name('textarea')
+    driver.find_element_by_class_name('csp_input_box').click()
+    textarea.send_keys(f'https://{hostname}')
+    button = driver.find_element_by_id('check')
+    button.click()
+    try:
+        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, 'evaluated-csp')))
+        evaluated_csp = driver.find_element_by_class_name('evaluated-csp')
+        evaluated_csp_html = evaluated_csp.get_attribute('innerHTML')
+    except TimeoutException:
+        return -1
+    except UnexpectedAlertPresentException:
+        return 0
+    finally:
+        driver.close()
+    if 'data-tooltip="High severity finding"' in evaluated_csp_html:
+        return 1
+    if 'data-tooltip="Medium severity finding"' in evaluated_csp_html:
+        return 2
+    if 'data-tooltip="Possible high severity finding"' in evaluated_csp_html:
+        return 3
+    if 'data-tooltip="Possible medium severity finding"' in evaluated_csp_html:
+        return 4
+    return 5
 
 
 # return 0 if Access-Control-Allow-Origin header is set to *
