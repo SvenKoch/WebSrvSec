@@ -55,9 +55,37 @@ def determine_referrer_policy_score():
     return -1
 
 
-def determine_csrf_score():
-    # TODO
-    return -1
+# return 0 if no csrf token was found but a form is present
+# return 1 if no csrf token was found but no form was present
+# return 2 if csrf token was found
+def determine_csrf_score(response):
+    # long alphanumeric string in hidden input field or cookie
+    # keywords: csrf, nonce, token
+    # negative cookie keyword: session
+
+    # csrf_token_found = False
+    csrf_keywords = ['csrf', 'token', 'nonce']
+    token_regex = '[a-zA-Z0-9]{20,}'
+
+    for cookie in response.cookies:
+        if any(keyword.casefold() in cookie.name.casefold() for keyword in csrf_keywords):
+            if not 'session'.casefold() in cookie.name.casefold():
+                if re.search(token_regex, cookie.value, re.I):
+                    # csrf_token_found = True
+                    return 2
+
+    soup = BeautifulSoup(response.text)
+    hidden_inputs = soup.find_all('input', type='hidden')
+    for hidden_input in hidden_inputs:
+        if any(keyword.casefold() in hidden_input.casefold() for keyword in csrf_keywords):
+            if re.search(token_regex, hidden_input, re.I):
+                # csrf_token_found = True
+                return 2
+
+    if soup.find('form'):
+        return 0
+
+    return 1
 
 
 # return -1 on timeout
