@@ -1,3 +1,4 @@
+browsermob-proxy
 selenium
 beautifulsoup4
 asn1crypto==0.24.0

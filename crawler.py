@@ -13,6 +13,7 @@ from sslyze.plugins.fallback_scsv_plugin import FallbackScsvScanCommand
 from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv30ScanCommand, Tlsv10ScanCommand, \
     Tlsv11ScanCommand, Tlsv12ScanCommand, Tlsv13ScanCommand
 from sslyze.server_connectivity_tester import ServerConnectivityTester, ServerConnectivityError
+from browsermobproxy import Server
 
 
 def save_results(results):
@@ -50,8 +51,52 @@ def determine_cache_control_score():
     return -1
 
 
-def determine_referrer_policy_score():
-    # TODO
+# TODO scoring
+def determine_referrer_policy_score(response, har_entries):
+    # analyze the server’s response headers
+    referrer_policy_header = response.headers['Referrer-Policy']
+    if referrer_policy_header:
+        referrer_policy_header = referrer_policy_header.casefold()
+        if referrer_policy_header == 'no-referrer'.casefold():
+            pass
+        if referrer_policy_header == 'no-referrer-when-downgrade'.casefold():
+            pass
+        if referrer_policy_header == 'origin'.casefold():
+            pass
+        if referrer_policy_header == 'origin-when-cross-origin'.casefold():
+            pass
+        if referrer_policy_header == 'same-origin'.casefold():
+            pass
+        if referrer_policy_header == 'strict-origin'.casefold():
+            pass
+        if referrer_policy_header == 'strict-origin-when-cross-origin'.casefold():
+            pass
+        if referrer_policy_header == 'unsafe-url'.casefold():
+            pass
+
+    # but also whether the Referer HTTP request headers of the web application’s outgoing requests
+    # to cross-domains contain the origin URLs
+    url_leaked_in_cross_domain_request = False
+    for entry in har_entries:
+        for request_header in entry['request']['headers']:
+            if request_header['name'].casefold() == 'Referer'.casefold():
+                if urlparse(entry['request']['url']).hostname != urlparse(response.url).hostname:
+                    if response.url in request_header['value']:
+                        url_leaked_in_cross_domain_request = True
+                        break
+        if url_leaked_in_cross_domain_request:
+            break
+
+    # parse the website’s source for meta tags containing referrer policies
+    soup = BeautifulSoup(response.text)
+    meta_policy = ''
+    for meta_tag in soup.find_all('meta', attrs={'name': 'referrer'}):
+        match = re.search('content="(.+)"', meta_tag)
+        if match:
+            if meta_policy:
+                # TODO handle more than one meta_policy
+                pass
+            meta_policy = match.group(1)
     return -1
 
 
@@ -112,7 +157,7 @@ def determine_csp_score(hostname):
     except UnexpectedAlertPresentException:
         return 0
     finally:
-        driver.close()
+        driver.quit()
     if 'data-tooltip="High severity finding"' in evaluated_csp_html:
         return 1
     if 'data-tooltip="Medium severity finding"' in evaluated_csp_html:
@@ -474,9 +519,22 @@ def analyze(hostname):
     # phase 3
     cookie_security_score = determine_cookie_security_score(response)
     cors_score = determine_cors_score(response)
-    csp_score = determine_csp_score()
-    csrf_score = determine_csrf_score()
-    referrer_policy_score = determine_referrer_policy_score()
+    csp_score = determine_csp_score(redirected_hostname)
+    csrf_score = determine_csrf_score(response)
+
+    server = Server()
+    server.start()
+    proxy = server.create_proxy()
+
+    options = webdriver.ChromeOptions()
+    options.add_argument(f'--proxy-server={proxy.proxy}')
+    driver = webdriver.Chrome(chrome_options=options)
+    proxy.new_har()
+    driver.get(f'https://{redirected_hostname}')
+    server.stop()
+    driver.quit()
+
+    referrer_policy_score = determine_referrer_policy_score(response, proxy.har['log']['entries'])
     cache_control_score = determine_cache_control_score()
     up_to_date_server_software_score = determine_up_to_date_server_software_score()
     # phase 4
