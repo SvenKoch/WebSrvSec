@@ -31,9 +31,20 @@ def determine_js_inclusion_cross_domain_existence_score():
     return -1
 
 
-def determine_sri_score():
-    # TODO
-    return -1
+# return 0 if no cross-origin-resources are integrity-checked
+# return 1 if some cross-origin-resources are integrity-checked
+# return 2 if all cross-origin-resources are integrity-checked
+def determine_sri_score(response):
+    # TODO consider require-sri-for CSP policy
+    soup = BeautifulSoup(response.text)
+    cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True)
+    sri_protected_cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True, integrity=True)
+
+    if set(cors_script_and_link_tags) == set(sri_protected_cors_script_and_link_tags):
+        return 2
+    if sri_protected_cors_script_and_link_tags:
+        return 1
+    return 0
 
 
 # return 0 if mixed content was detected
@@ -191,6 +202,8 @@ def determine_csrf_score(response):
 # return 4 if evaluation of CSP yields possible medium severity finding(s)
 # return 5 if evaluation of CSP yields no (possibly) negative findings
 def determine_csp_score(hostname):
+    # TODO return if upgrade-insecure-requests CSP policy is set
+    # TODO return if require-sri-for CSP policy is set
     driver = webdriver.Chrome()
     driver.get('https://csp-evaluator.withgoogle.com')
     textarea = driver.find_element_by_tag_name('textarea')
@@ -219,11 +232,28 @@ def determine_csp_score(hostname):
     return 5
 
 
+# return 0 if crossorigin="use-credentials" was found in HTML source
+# return 1 otherwise
+def determine_cors_score(response, har_entries):
+    for entry in har_entries:
+        for request_header in entry['request']['headers']:
+            if request_header['name'].casefold() == 'Origin'.casefold():
+                if request_header['value'].casefold() != 'None'.casefold():
+                    # Origin header is set, so this is either a CORS or a POST request
+                    # TODO what do we do with this information?
+                    pass
+
+    soup = BeautifulSoup(response.text)
+    if soup.find_all(True, crossorigin=re.compile('^use-credentials$', re.I)):
+        return 0
+    return 1
+
+
 # return 0 if Access-Control-Allow-Origin header is set to *
 # return 1 if Access-Control-Allow-Origin header is present
 # return 2 if Access-Control-Allow-Origin header is absent
 # add 3 for X-Permitted-Cross-Domain-Policies: none or if neither crossdomain.xml nor clientaccesspolicy.xml are present
-def determine_cors_score(response):
+def determine_cors_policy_score(response):
     access_control_allow_origin_header = response.headers['Access-Control-Allow-Origin']
     x_permitted_cross_domain_policies_header = response.headers['X-Permitted-Cross-Domain-Policies']
     x_permitted_cross_domain_policies_set_to_none = False
@@ -568,7 +598,7 @@ def analyze(hostname):
     expect_ct_score = determine_expect_ct_score(response_headers)
     # phase 3
     cookie_security_score = determine_cookie_security_score(response)
-    cors_score = determine_cors_score(response)
+    cors_policy_score = determine_cors_policy_score(response)
     csp_score = determine_csp_score(redirected_hostname)
     csrf_score = determine_csrf_score(response)
 
@@ -584,12 +614,14 @@ def analyze(hostname):
     server.stop()
     driver.quit()
 
-    referrer_policy_score = determine_referrer_policy_score(response, proxy.har['log']['entries'])
-    cache_control_score = determine_cache_control_score()
+    har_entries = proxy.har['log']['entries']
+    cors_score = determine_cors_score(response, har_entries)
+    referrer_policy_score = determine_referrer_policy_score(response, har_entries)
+    cache_control_score = determine_cache_control_score(response)
     up_to_date_server_software_score = determine_up_to_date_server_software_score()
     # phase 4
-    mixed_content_score = determine_mixed_content_score()
-    sri_score = determine_sri_score()
+    mixed_content_score = determine_mixed_content_score(har_entries)
+    sri_score = determine_sri_score(response)
     js_inclusion_cross_domain_existence_score = determine_js_inclusion_cross_domain_existence_score()
     up_to_date_third_party_lib_score = determine_up_to_date_third_party_lib_score()
 
@@ -605,6 +637,7 @@ def analyze(hostname):
         'x_download_options_score': x_download_options_score,
         'expect_ct_score': expect_ct_score,
         'cookie_security_score': cookie_security_score,
+        'cors_policy_score': cors_policy_score,
         'cors_score': cors_score,
         'csp_score': csp_score,
         'csrf_score': csrf_score,
