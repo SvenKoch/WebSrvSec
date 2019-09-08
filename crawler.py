@@ -46,12 +46,55 @@ def determine_up_to_date_server_software_score():
     return -1
 
 
-def determine_cache_control_score():
-    # TODO
+def determine_cache_control_score(response):
+    cache_control = response.headers['Cache-Control']
+    pragma = response.headers['Pragma']
+    # mandatory
+    private_directive = False
+    no_store_directive = False
+    # bonus
+    no_cache_directive = False
+    must_revalidate = False
+    max_age_0 = False
+    pragma_no_cache = False
+
+    soup = BeautifulSoup(response.text)
+    for meta_tag in soup.find_all('meta', attrs={'http-equiv': re.compile('^cache-control$', re.I)}):
+        match = re.search('content="(.+)"', meta_tag, re.I)
+        if match:
+            meta_content = match.group(1)
+            if cache_control:
+                cache_control = f'{cache_control}, {meta_content}'
+            else:
+                cache_control = meta_content
+
+    for meta_tag in soup.find_all('meta', attrs={'http-equiv': re.compile('^pragma$', re.I)}):
+        match = re.search('content="(.+)"', meta_tag, re.I)
+        if match:
+            meta_content = match.group(1)
+            if pragma:
+                pragma = f'{pragma}, {meta_content}'
+            else:
+                pragma = meta_content
+
+    if cache_control:
+        if 'private'.casefold() in cache_control.casefold():
+            private_directive = True
+        if 'no-store'.casefold() in cache_control.casefold():
+            no_store_directive = True
+        if 'no-cache'.casefold() in cache_control.casefold():
+            no_cache_directive = True
+        if 'must-revalidate'.casefold() in cache_control.casefold():
+            must_revalidate = True
+        if 'max-age=0'.casefold() in cache_control.casefold():
+            max_age_0 = True
+    if pragma and pragma.casefold() == 'no-cache'.casefold():
+        pragma_no_cache = True
+
+    # TODO scoring
     return -1
 
 
-# TODO scoring
 def determine_referrer_policy_score(response, har_entries):
     # analyze the server’s response headers
     referrer_policy_header = response.headers['Referrer-Policy']
@@ -90,13 +133,15 @@ def determine_referrer_policy_score(response, har_entries):
     # parse the website’s source for meta tags containing referrer policies
     soup = BeautifulSoup(response.text)
     meta_policy = ''
-    for meta_tag in soup.find_all('meta', attrs={'name': 'referrer'}):
-        match = re.search('content="(.+)"', meta_tag)
+    for meta_tag in soup.find_all('meta', attrs={'name': re.compile('^referrer$', re.I)}):
+        match = re.search('content="(.+)"', meta_tag, re.I)
         if match:
             if meta_policy:
                 # TODO handle more than one meta_policy
                 pass
             meta_policy = match.group(1)
+
+    # TODO scoring
     return -1
 
 
@@ -229,7 +274,7 @@ def determine_cookie_security_score(response):
             same_site = False
 
     soup = BeautifulSoup(response.text)
-    set_cookie_metas = soup.find_all('meta', attrs={"http-equiv": "Set-Cookie"})
+    set_cookie_metas = soup.find_all('meta', attrs={"http-equiv": re.compile("^Set-Cookie$", re.I)})
     if set_cookie_metas:
         cookies_set_via_meta_tags = True
     for cookie in set_cookie_metas:
