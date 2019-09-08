@@ -22,7 +22,7 @@ def save_results(results):
 
 
 def determine_up_to_date_third_party_lib_score():
-    # TODO
+    # TODO WhatsWeb Scan
     return -1
 
 
@@ -36,13 +36,18 @@ def determine_sri_score():
     return -1
 
 
-def determine_mixed_content_score():
-    # TODO
-    return -1
+# return 0 if mixed content was detected
+# return 1 otherwise
+def determine_mixed_content_score(har_entries):
+    # TODO consider upgrade-insecure-requests CSP policy
+    for entry in har_entries:
+        if urlparse(entry['request']['url']).scheme.casefold() != 'https'.casefold():
+            return 0
+    return 1
 
 
 def determine_up_to_date_server_software_score():
-    # TODO
+    # TODO WhatsWeb Scan
     return -1
 
 
