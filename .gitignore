@@ -1,3 +1,5 @@
 .idea/
 venv/
 chromedriver*
+browsermob-proxy-*
+*.log

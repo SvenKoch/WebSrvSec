@@ -29,8 +29,8 @@ def determine_up_to_date_third_party_lib_score():
 
 # return 0 if any cross-domain requests query non-existing domains
 # return 1 otherwise
-def determine_cross_domain_existence_score(response, har_entries):
-    hostname = urlparse(response.url).hostname
+def determine_cross_domain_existence_score(response_url, har_entries):
+    hostname = urlparse(response_url).hostname
     for entry in har_entries:
         url = entry['request']['url']
         if urlparse(url).hostname != hostname:
@@ -44,9 +44,8 @@ def determine_cross_domain_existence_score(response, har_entries):
 # return 0 if no cross-origin-resources are integrity-checked
 # return 1 if some cross-origin-resources are integrity-checked
 # return 2 if all cross-origin-resources are integrity-checked
-def determine_sri_score(response):
+def determine_sri_score(soup):
     # TODO consider require-sri-for CSP policy
-    soup = BeautifulSoup(response.text)
     cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True)
     sri_protected_cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True, integrity=True)
 
@@ -72,9 +71,9 @@ def determine_up_to_date_server_software_score():
     return -1
 
 
-def determine_cache_control_score(response):
-    cache_control = response.headers['Cache-Control']
-    pragma = response.headers['Pragma']
+def determine_cache_control_score(response_headers, soup):
+    cache_control = response_headers.get('Cache-Control')
+    pragma = response_headers.get('Pragma')
     # mandatory
     private_directive = False
     no_store_directive = False
@@ -84,7 +83,6 @@ def determine_cache_control_score(response):
     max_age_0 = False
     pragma_no_cache = False
 
-    soup = BeautifulSoup(response.text)
     for meta_tag in soup.find_all('meta', attrs={'http-equiv': re.compile('^cache-control$', re.I)}):
         match = re.search('content="(.+)"', meta_tag, re.I)
         if match:
@@ -121,9 +119,9 @@ def determine_cache_control_score(response):
     return -1
 
 
-def determine_referrer_policy_score(response, har_entries):
+def determine_referrer_policy_score(response_headers, response_url, soup, har_entries):
     # analyze the server’s response headers
-    referrer_policy_header = response.headers['Referrer-Policy']
+    referrer_policy_header = response_headers.get('Referrer-Policy')
     if referrer_policy_header:
         referrer_policy_header = referrer_policy_header.casefold()
         if referrer_policy_header == 'no-referrer'.casefold():
@@ -149,15 +147,14 @@ def determine_referrer_policy_score(response, har_entries):
     for entry in har_entries:
         for request_header in entry['request']['headers']:
             if request_header['name'].casefold() == 'Referer'.casefold():
-                if urlparse(entry['request']['url']).hostname != urlparse(response.url).hostname:
-                    if response.url in request_header['value']:
+                if urlparse(entry['request']['url']).hostname != urlparse(response_url).hostname:
+                    if response_url in request_header['value']:
                         url_leaked_in_cross_domain_request = True
                         break
         if url_leaked_in_cross_domain_request:
             break
 
     # parse the website’s source for meta tags containing referrer policies
-    soup = BeautifulSoup(response.text)
     meta_policy = ''
     for meta_tag in soup.find_all('meta', attrs={'name': re.compile('^referrer$', re.I)}):
         match = re.search('content="(.+)"', meta_tag, re.I)
@@ -174,7 +171,7 @@ def determine_referrer_policy_score(response, har_entries):
 # return 0 if no csrf token was found but a form is present
 # return 1 if no csrf token was found but no form was present
 # return 2 if csrf token was found
-def determine_csrf_score(response):
+def determine_csrf_score(response_cookies, soup):
     # long alphanumeric string in hidden input field or cookie
     # keywords: csrf, nonce, token
     # negative cookie keyword: session
@@ -183,18 +180,18 @@ def determine_csrf_score(response):
     csrf_keywords = ['csrf', 'token', 'nonce']
     token_regex = '[a-zA-Z0-9]{20,}'
 
-    for cookie in response.cookies:
+    for cookie in response_cookies:
         if any(keyword.casefold() in cookie.name.casefold() for keyword in csrf_keywords):
             if not 'session'.casefold() in cookie.name.casefold():
                 if re.search(token_regex, cookie.value, re.I):
                     # csrf_token_found = True
                     return 2
 
-    soup = BeautifulSoup(response.text)
     hidden_inputs = soup.find_all('input', type='hidden')
     for hidden_input in hidden_inputs:
-        if any(keyword.casefold() in hidden_input.casefold() for keyword in csrf_keywords):
-            if re.search(token_regex, hidden_input, re.I):
+        hidden_input_string = str(hidden_input).casefold()
+        if any(keyword.casefold() in hidden_input_string for keyword in csrf_keywords):
+            if re.search(token_regex, hidden_input_string, re.I):
                 # csrf_token_found = True
                 return 2
 
@@ -244,7 +241,7 @@ def determine_csp_score(hostname):
 
 # return 0 if crossorigin="use-credentials" was found in HTML source
 # return 1 otherwise
-def determine_cors_score(response, har_entries):
+def determine_cors_score(soup, har_entries):
     for entry in har_entries:
         for request_header in entry['request']['headers']:
             if request_header['name'].casefold() == 'Origin'.casefold():
@@ -253,7 +250,6 @@ def determine_cors_score(response, har_entries):
                     # TODO what do we do with this information?
                     pass
 
-    soup = BeautifulSoup(response.text)
     if soup.find_all(True, crossorigin=re.compile('^use-credentials$', re.I)):
         return 0
     return 1
@@ -263,9 +259,9 @@ def determine_cors_score(response, har_entries):
 # return 1 if Access-Control-Allow-Origin header is present
 # return 2 if Access-Control-Allow-Origin header is absent
 # add 3 for X-Permitted-Cross-Domain-Policies: none or if neither crossdomain.xml nor clientaccesspolicy.xml are present
-def determine_cors_policy_score(response):
-    access_control_allow_origin_header = response.headers['Access-Control-Allow-Origin']
-    x_permitted_cross_domain_policies_header = response.headers['X-Permitted-Cross-Domain-Policies']
+def determine_cors_policy_score(response_headers, response_url):
+    access_control_allow_origin_header = response_headers.get('Access-Control-Allow-Origin')
+    x_permitted_cross_domain_policies_header = response_headers.get('X-Permitted-Cross-Domain-Policies')
     x_permitted_cross_domain_policies_set_to_none = False
     lazy_wildcard = False
     crossdomain_xml_present = False
@@ -276,7 +272,7 @@ def determine_cors_policy_score(response):
             and x_permitted_cross_domain_policies_header.casefold() == 'none'.casefold():
         x_permitted_cross_domain_policies_set_to_none = True
 
-    hostname = urlparse(response.url).hostname
+    hostname = urlparse(response_url).hostname
     crossdomain_xml = requests.get(f'https://{hostname}/crossdomain.xml')
     clientaccesspolicy_xml = requests.get(f'https://{hostname}/clientaccesspolicy.xml')
 
@@ -300,17 +296,17 @@ def determine_cors_policy_score(response):
     return score
 
 
-# return 14 if all cookies contain the Secure, HttpOnly and SameSite=Strict directives and are set via header
+# return 15 if all cookies contain the Secure, HttpOnly and SameSite=Strict directives and are set via header
 # subtract 1 for missing SameSite directive
 # subtract 2 for missing HttpOnly directive
 # subtract 4 for missing Secure directive
-# subtract 7 for cookies set via meta tag in HTML source
-def determine_cookie_security_score(response):
+# subtract 8 for cookies set via meta tag in HTML source
+def determine_cookie_security_score(response_cookies, soup):
     cookies_set_via_meta_tags = False
     secure = True
     http_only = True
     same_site = True
-    for cookie in response.cookies:
+    for cookie in response_cookies:
         if not cookie.secure:
             secure = False
         if not cookie.has_nonstandard_attr('HttpOnly'):
@@ -318,7 +314,6 @@ def determine_cookie_security_score(response):
         if not cookie.get_nonstandard_attr('SameSite', default='').casefold() == 'Strict'.casefold():
             same_site = False
 
-    soup = BeautifulSoup(response.text)
     set_cookie_metas = soup.find_all('meta', attrs={"http-equiv": re.compile("^Set-Cookie$", re.I)})
     if set_cookie_metas:
         cookies_set_via_meta_tags = True
@@ -334,9 +329,9 @@ def determine_cookie_security_score(response):
             if 'SameSite=Strict'.casefold() not in split_content:
                 same_site = False
 
-    score = 14
+    score = 15
     if cookies_set_via_meta_tags:
-        score -= 7
+        score -= 8
     if not secure:
         score -= 4
     if not http_only:
@@ -350,7 +345,7 @@ def determine_cookie_security_score(response):
 # return 1 if in report-only mode
 # return 2 if in enforce(-and-report)-mode
 def determine_expect_ct_score(response_headers):
-    expect_ct_header = response_headers('Expect-CT')
+    expect_ct_header = response_headers.get('Expect-CT')
     if expect_ct_header is None:
         return 0
     if re.search('max-age=(\\d+)', expect_ct_header, flags=re.I) is None:
@@ -365,7 +360,7 @@ def determine_expect_ct_score(response_headers):
 # return 1 if X-Download-Options: is set to noopen
 # return 0 otherwise
 def determine_x_download_options_score(response_headers):
-    download_options_header = response_headers['X-Download-Options']
+    download_options_header = response_headers.get('X-Download-Options')
     if download_options_header is None:
         return 0
     if 'noopen'.casefold() == download_options_header.casefold():
@@ -377,7 +372,7 @@ def determine_x_download_options_score(response_headers):
 # return 1 if X-Frame-Options is set to DENY or SAMEORIGIN
 # return 0 otherwise
 def determine_x_frame_options_score(response_headers):
-    frame_options_header = response_headers['X-Frame-Options']
+    frame_options_header = response_headers.get('X-Frame-Options')
     if frame_options_header is None:
         return 0
     if 'DENY'.casefold() == frame_options_header.casefold() \
@@ -391,7 +386,7 @@ def determine_x_frame_options_score(response_headers):
 # return 1 if X-XSS-Protection header is absent
 # return 2 if X-XSS-Protection is set to 1
 def determine_x_xss_protection_score(response_headers):
-    xss_protection_header = response_headers['X-XSS-Protection']
+    xss_protection_header = response_headers.get('X-XSS-Protection')
     if xss_protection_header is None:
         return 1
     if '0' == xss_protection_header[0]:
@@ -403,7 +398,7 @@ def determine_x_xss_protection_score(response_headers):
 # return 1 if X-Content-Type-Options is set to nosniff
 # return 0 otherwise
 def determine_x_content_type_options_score(response_headers):
-    content_type_options_header = response_headers['X-Content-Type-Options']
+    content_type_options_header = response_headers.get('X-Content-Type-Options')
     if content_type_options_header is None:
         return 0
     if 'nosniff'.casefold() == content_type_options_header.casefold():
@@ -415,7 +410,7 @@ def determine_x_content_type_options_score(response_headers):
 # add 1 if max-age is between 15 and 120 days
 # add 2 for includeSubDomains option
 def determine_hpkp_score(response_headers):
-    hpkp_header = response_headers['Public-Key-Pins']
+    hpkp_header = response_headers.get('Public-Key-Pins')
     if hpkp_header is None:
         return 0
     if 'pin-sha256'.casefold() not in hpkp_header.casefold():
@@ -599,6 +594,23 @@ def analyze(hostname):
     response = requests.get(f'https://{redirected_hostname}', timeout=10)
     # TODO handle timeout
     response_headers = response.headers
+    response_cookies = response.cookies
+    response_url = response.url
+    soup = BeautifulSoup(response.text, features='html.parser')
+
+    server = Server("browsermob-proxy-2.1.4\\bin\\browsermob-proxy")
+    server.start()
+    proxy = server.create_proxy()
+    options = webdriver.ChromeOptions()
+    options.add_argument(f'--proxy-server={proxy.proxy}')
+    driver = webdriver.Chrome(options=options)
+    proxy.new_har()
+    driver.get(f'https://{redirected_hostname}')
+    server.stop()
+    driver.quit()
+
+    har_entries = proxy.har['log']['entries']
+
     hsts_score = determine_hsts_score(response_headers)
     hpkp_score = determine_hpkp_score(response_headers)
     x_content_type_options_score = determine_x_content_type_options_score(response_headers)
@@ -607,32 +619,19 @@ def analyze(hostname):
     x_download_options_score = determine_x_download_options_score(response_headers)
     expect_ct_score = determine_expect_ct_score(response_headers)
     # phase 3
-    cookie_security_score = determine_cookie_security_score(response)
-    cors_policy_score = determine_cors_policy_score(response)
+    cookie_security_score = determine_cookie_security_score(response_cookies, soup)
+    cors_policy_score = determine_cors_policy_score(response_headers, response_url)
     csp_score = determine_csp_score(redirected_hostname)
-    csrf_score = determine_csrf_score(response)
+    csrf_score = determine_csrf_score(response_cookies, soup)
 
-    server = Server()
-    server.start()
-    proxy = server.create_proxy()
-
-    options = webdriver.ChromeOptions()
-    options.add_argument(f'--proxy-server={proxy.proxy}')
-    driver = webdriver.Chrome(chrome_options=options)
-    proxy.new_har()
-    driver.get(f'https://{redirected_hostname}')
-    server.stop()
-    driver.quit()
-
-    har_entries = proxy.har['log']['entries']
-    cors_score = determine_cors_score(response, har_entries)
-    referrer_policy_score = determine_referrer_policy_score(response, har_entries)
-    cache_control_score = determine_cache_control_score(response)
+    cors_score = determine_cors_score(soup, har_entries)
+    referrer_policy_score = determine_referrer_policy_score(response_headers, response_url, soup, har_entries)
+    cache_control_score = determine_cache_control_score(response_headers, soup)
     up_to_date_server_software_score = determine_up_to_date_server_software_score()
     # phase 4
     mixed_content_score = determine_mixed_content_score(har_entries)
-    sri_score = determine_sri_score(response)
-    js_inclusion_cross_domain_existence_score = determine_cross_domain_existence_score(response, har_entries)
+    sri_score = determine_sri_score(soup)
+    js_inclusion_cross_domain_existence_score = determine_cross_domain_existence_score(response_url, har_entries)
     up_to_date_third_party_lib_score = determine_up_to_date_third_party_lib_score()
 
     results = {
@@ -663,8 +662,8 @@ def analyze(hostname):
 
 
 if __name__ == '__main__':
-    analyze('google.com')
-    analyze('github.com')
+    # analyze('google.com')
+    # analyze('github.com')
     analyze('vr-bank.de')
-    analyze('sparkasse.de')
+    # analyze('sparkasse.de')
     # analyze('sparkasse-nuernberg.de')
