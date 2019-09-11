@@ -2,6 +2,8 @@ import re
 from urllib.parse import urlparse
 
 import requests
+import whois
+from browsermobproxy import Server
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, UnexpectedAlertPresentException
@@ -13,7 +15,6 @@ from sslyze.plugins.fallback_scsv_plugin import FallbackScsvScanCommand
 from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv30ScanCommand, Tlsv10ScanCommand, \
     Tlsv11ScanCommand, Tlsv12ScanCommand, Tlsv13ScanCommand
 from sslyze.server_connectivity_tester import ServerConnectivityTester, ServerConnectivityError
-from browsermobproxy import Server
 
 
 def save_results(results):
@@ -26,9 +27,18 @@ def determine_up_to_date_third_party_lib_score():
     return -1
 
 
-def determine_js_inclusion_cross_domain_existence_score():
-    # TODO
-    return -1
+# return 0 if any cross-domain requests query non-existing domains
+# return 1 otherwise
+def determine_cross_domain_existence_score(response, har_entries):
+    hostname = urlparse(response.url).hostname
+    for entry in har_entries:
+        url = entry['request']['url']
+        if urlparse(url).hostname != hostname:
+            try:
+                whois.whois(url)
+            except whois.parser.PywhoisError:
+                return 0
+    return 1
 
 
 # return 0 if no cross-origin-resources are integrity-checked
@@ -622,7 +632,7 @@ def analyze(hostname):
     # phase 4
     mixed_content_score = determine_mixed_content_score(har_entries)
     sri_score = determine_sri_score(response)
-    js_inclusion_cross_domain_existence_score = determine_js_inclusion_cross_domain_existence_score()
+    js_inclusion_cross_domain_existence_score = determine_cross_domain_existence_score(response, har_entries)
     up_to_date_third_party_lib_score = determine_up_to_date_third_party_lib_score()
 
     results = {
