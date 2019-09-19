@@ -16,62 +16,66 @@ from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv3
     Tlsv11ScanCommand, Tlsv12ScanCommand, Tlsv13ScanCommand
 from sslyze.server_connectivity_tester import ServerConnectivityTester, ServerConnectivityError
 
+from results import CrossDomainExistenceResult, SriResult, MixedContentResult, UpToDateServerSoftwareResult, \
+    UpToDateThirdPartyLibResult, SuccessResult, CacheControlResult, ReferrerPolicyResult, CsrfResult, Severity, \
+    CspResult, \
+    CorsResult, CorsPolicyResult, CookieSecurityResult, ExpectCtResult, XDownloadOptionsResult, XFrameOptionsResult, \
+    XXssProtectionResult, XContentTypeOptionsResult, HpkpResult, HstsResult, TlsResult, HttpRedirectionResult, \
+    ErrorResult
 
-def save_results(results):
+
+def save_result(results):
     # TODO
     print(results)
 
 
-def determine_up_to_date_third_party_lib_score():
-    # TODO WhatsWeb Scan
-    return -1
-
-
-# return 0 if any cross-domain requests query non-existing domains
-# return 1 otherwise
-def determine_cross_domain_existence_score(response_url, har_entries):
+def analyze_cross_domain_existence(response_url, har_entries):
     hostname = urlparse(response_url).hostname
+    query_to_non_existing_domain = False
+    non_existing_domains = []
     for entry in har_entries:
         url = entry['request']['url']
         if urlparse(url).hostname != hostname:
             try:
                 whois.whois(url)
             except whois.parser.PywhoisError:
-                return 0
-    return 1
+                query_to_non_existing_domain = True
+                non_existing_domains.append(url)
+
+    return CrossDomainExistenceResult(query_to_non_existing_domain=query_to_non_existing_domain,
+                                      non_existing_domains=non_existing_domains)
 
 
-# return 0 if no cross-origin-resources are integrity-checked
-# return 1 if some cross-origin-resources are integrity-checked
-# return 2 if all cross-origin-resources are integrity-checked
-def determine_sri_score(soup):
-    # TODO consider require-sri-for CSP policy
+def analyze_sri_protection(soup):
     cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True)
-    sri_protected_cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True, integrity=True)
+    protected_cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True, integrity=True)
+    unprotected_cors_script_and_link_tags = \
+        list(set(cors_script_and_link_tags).difference(protected_cors_script_and_link_tags))
 
-    if set(cors_script_and_link_tags) == set(sri_protected_cors_script_and_link_tags):
-        return 2
-    if sri_protected_cors_script_and_link_tags:
-        return 1
-    return 0
+    return SriResult(protected_cors_script_and_link_tags=protected_cors_script_and_link_tags,
+                     unprotected_cors_script_and_link_tags=unprotected_cors_script_and_link_tags)
 
 
-# return 0 if mixed content was detected
-# return 1 otherwise
-def determine_mixed_content_score(har_entries):
-    # TODO consider upgrade-insecure-requests CSP policy
+def analyze_mixed_content(har_entries):
+    outgoing_http_request_urls = []
     for entry in har_entries:
-        if urlparse(entry['request']['url']).scheme.casefold() != 'https'.casefold():
-            return 0
-    return 1
+        url = entry['request']['url']
+        if urlparse(url).scheme.casefold() != 'https'.casefold():
+            outgoing_http_request_urls.append(url)
+    return MixedContentResult(outgoing_http_request_urls=outgoing_http_request_urls)
 
 
-def determine_up_to_date_server_software_score():
+def analyze_up_to_date_third_party_libs():
     # TODO WhatsWeb Scan
-    return -1
+    return UpToDateThirdPartyLibResult()
 
 
-def determine_cache_control_score(response_headers, soup):
+def analyze_up_to_date_server_software():
+    # TODO WhatsWeb Scan
+    return UpToDateServerSoftwareResult()
+
+
+def analyze_cache_control(response_headers, soup):
     cache_control = response_headers.get('Cache-Control')
     pragma = response_headers.get('Pragma')
     # mandatory
@@ -115,31 +119,17 @@ def determine_cache_control_score(response_headers, soup):
     if pragma and pragma.casefold() == 'no-cache'.casefold():
         pragma_no_cache = True
 
-    # TODO scoring
-    return -1
+    return CacheControlResult(private_directive=private_directive,
+                              no_store_directive=no_store_directive,
+                              no_cache_directive=no_cache_directive,
+                              must_revalidate=must_revalidate,
+                              max_age_0=max_age_0,
+                              pragma_no_cache=pragma_no_cache)
 
 
-def determine_referrer_policy_score(response_headers, response_url, soup, har_entries):
+def analyze_referrer_policy(response_headers, response_url, soup, har_entries):
     # analyze the server’s response headers
-    referrer_policy_header = response_headers.get('Referrer-Policy')
-    if referrer_policy_header:
-        referrer_policy_header = referrer_policy_header.casefold()
-        if referrer_policy_header == 'no-referrer'.casefold():
-            pass
-        if referrer_policy_header == 'no-referrer-when-downgrade'.casefold():
-            pass
-        if referrer_policy_header == 'origin'.casefold():
-            pass
-        if referrer_policy_header == 'origin-when-cross-origin'.casefold():
-            pass
-        if referrer_policy_header == 'same-origin'.casefold():
-            pass
-        if referrer_policy_header == 'strict-origin'.casefold():
-            pass
-        if referrer_policy_header == 'strict-origin-when-cross-origin'.casefold():
-            pass
-        if referrer_policy_header == 'unsafe-url'.casefold():
-            pass
+    referrer_policy_header = response_headers.get('Referrer-Policy', '').casefold()
 
     # but also whether the Referer HTTP request headers of the web application’s outgoing requests
     # to cross-domains contain the origin URLs
@@ -156,27 +146,30 @@ def determine_referrer_policy_score(response_headers, response_url, soup, har_en
 
     # parse the website’s source for meta tags containing referrer policies
     meta_policy = ''
+    multiple_meta_policies = False
     for meta_tag in soup.find_all('meta', attrs={'name': re.compile('^referrer$', re.I)}):
         match = re.search('content="(.+)"', meta_tag, re.I)
         if match:
-            if meta_policy:
-                # TODO handle more than one meta_policy
-                pass
+            if meta_policy and match.group(1) != meta_policy:
+                multiple_meta_policies = True
+                meta_policy = ''
+                break
             meta_policy = match.group(1)
 
-    # TODO scoring
-    return -1
+    return ReferrerPolicyResult(referrer_policy_header=referrer_policy_header,
+                                url_leaked_in_cross_domain_request=url_leaked_in_cross_domain_request,
+                                meta_policy=meta_policy,
+                                multiple_meta_policies=multiple_meta_policies)
 
 
-# return 0 if no csrf token was found but a form is present
-# return 1 if no csrf token was found but no form was present
-# return 2 if csrf token was found
-def determine_csrf_score(response_cookies, soup):
+def analyze_csrf(response_cookies, soup):
     # long alphanumeric string in hidden input field or cookie
     # keywords: csrf, nonce, token
     # negative cookie keyword: session
 
-    # csrf_token_found = False
+    form_present = False
+    if soup.find('form'):
+        form_present = True
     csrf_keywords = ['csrf', 'token', 'nonce']
     token_regex = '[a-zA-Z0-9]{20,}'
 
@@ -184,33 +177,21 @@ def determine_csrf_score(response_cookies, soup):
         if any(keyword.casefold() in cookie.name.casefold() for keyword in csrf_keywords):
             if not 'session'.casefold() in cookie.name.casefold():
                 if re.search(token_regex, cookie.value, re.I):
-                    # csrf_token_found = True
-                    return 2
+                    return CsrfResult(csrf_token_found=True, form_present=form_present)
 
     hidden_inputs = soup.find_all('input', type='hidden')
     for hidden_input in hidden_inputs:
         hidden_input_string = str(hidden_input).casefold()
         if any(keyword.casefold() in hidden_input_string for keyword in csrf_keywords):
             if re.search(token_regex, hidden_input_string, re.I):
-                # csrf_token_found = True
-                return 2
+                return CsrfResult(csrf_token_found=True, form_present=form_present)
 
-    if soup.find('form'):
-        return 0
-
-    return 1
+    return CsrfResult(csrf_token_found=False, form_present=form_present)
 
 
-# return -1 on timeout
-# return 0 if no Content Security Policy is found
-# return 1 if evaluation of CSP yields high severity finding(s)
-# return 2 if evaluation of CSP yields medium severity finding(s)
-# return 3 if evaluation of CSP yields possible high severity finding(s)
-# return 4 if evaluation of CSP yields possible medium severity finding(s)
-# return 5 if evaluation of CSP yields no (possibly) negative findings
-def determine_csp_score(hostname):
-    # TODO return if upgrade-insecure-requests CSP policy is set
-    # TODO return if require-sri-for CSP policy is set
+def analyze_csp(hostname):
+    highest_severity_finding = Severity.AllGood
+    csp = {}
     driver = webdriver.Chrome()
     driver.get('https://csp-evaluator.withgoogle.com')
     textarea = driver.find_element_by_tag_name('textarea')
@@ -223,25 +204,39 @@ def determine_csp_score(hostname):
         evaluated_csp = driver.find_element_by_class_name('evaluated-csp')
         evaluated_csp_html = evaluated_csp.get_attribute('innerHTML')
     except TimeoutException:
-        return -1
+        return CspResult(csp_present=False,
+                         csp=csp,
+                         highest_severity_finding=highest_severity_finding,
+                         timeout_on_csp_evaluator=True)
     except UnexpectedAlertPresentException:
-        return 0
+        return CspResult(csp_present=False,
+                         csp=csp,
+                         highest_severity_finding=highest_severity_finding,
+                         timeout_on_csp_evaluator=False)
     finally:
         driver.quit()
     if 'data-tooltip="High severity finding"' in evaluated_csp_html:
-        return 1
-    if 'data-tooltip="Medium severity finding"' in evaluated_csp_html:
-        return 2
-    if 'data-tooltip="Possible high severity finding"' in evaluated_csp_html:
-        return 3
-    if 'data-tooltip="Possible medium severity finding"' in evaluated_csp_html:
-        return 4
-    return 5
+        highest_severity_finding = Severity.High
+    elif 'data-tooltip="Medium severity finding"' in evaluated_csp_html:
+        highest_severity_finding = Severity.Medium
+    elif 'data-tooltip="Possible high severity finding"' in evaluated_csp_html:
+        highest_severity_finding = Severity.PossiblyHigh
+    elif 'data-tooltip="Possible medium severity finding"' in evaluated_csp_html:
+        highest_severity_finding = Severity.PossiblyMedium
+
+    response = requests.post('https://csp-evaluator.withgoogle.com/getCSP', data={'url': f'https://{hostname}'})
+    csp_list = response.json()['csp'].split(';')
+    for x in csp_list:
+        key, value = x.split(maxsplit=1)
+        csp[key] = value
+
+    return CspResult(csp_present=True,
+                     csp=csp,
+                     highest_severity_finding=highest_severity_finding,
+                     timeout_on_csp_evaluator=False)
 
 
-# return 0 if crossorigin="use-credentials" was found in HTML source
-# return 1 otherwise
-def determine_cors_score(soup, har_entries):
+def analyze_cors(soup, har_entries):
     for entry in har_entries:
         for request_header in entry['request']['headers']:
             if request_header['name'].casefold() == 'Origin'.casefold():
@@ -249,17 +244,13 @@ def determine_cors_score(soup, har_entries):
                     # Origin header is set, so this is either a CORS or a POST request
                     # TODO what do we do with this information?
                     pass
-
+    cross_origin_use_credentials = False
     if soup.find_all(True, crossorigin=re.compile('^use-credentials$', re.I)):
-        return 0
-    return 1
+        cross_origin_use_credentials = True
+    return CorsResult(cross_origin_use_credentials=cross_origin_use_credentials)
 
 
-# return 0 if Access-Control-Allow-Origin header is set to *
-# return 1 if Access-Control-Allow-Origin header is present
-# return 2 if Access-Control-Allow-Origin header is absent
-# add 3 for X-Permitted-Cross-Domain-Policies: none or if neither crossdomain.xml nor clientaccesspolicy.xml are present
-def determine_cors_policy_score(response_headers, response_url):
+def analyze_cors_policy(response_headers, response_url):
     access_control_allow_origin_header = response_headers.get('Access-Control-Allow-Origin')
     x_permitted_cross_domain_policies_header = response_headers.get('X-Permitted-Cross-Domain-Policies')
     x_permitted_cross_domain_policies_set_to_none = False
@@ -283,25 +274,14 @@ def determine_cors_policy_score(response_headers, response_url):
 
     # TODO nice to have: analyze XML files if present
 
-    if lazy_wildcard:
-        score = 0
-    elif access_control_allow_origin_header:
-        score = 1
-    else:
-        score = 2
-
-    if x_permitted_cross_domain_policies_set_to_none or \
-            (not crossdomain_xml_present and not clientaccesspolicy_xml_present):
-        score += 3
-    return score
+    return CorsPolicyResult(access_control_allow_origin_header=access_control_allow_origin_header,
+                            lazy_wildcard=lazy_wildcard,
+                            x_permitted_cross_domain_policies_set_to_none=x_permitted_cross_domain_policies_set_to_none,
+                            crossdomain_xml_present=crossdomain_xml_present,
+                            clientaccesspolicy_xml_present=clientaccesspolicy_xml_present)
 
 
-# return 15 if all cookies contain the Secure, HttpOnly and SameSite=Strict directives and are set via header
-# subtract 1 for missing SameSite directive
-# subtract 2 for missing HttpOnly directive
-# subtract 4 for missing Secure directive
-# subtract 8 for cookies set via meta tag in HTML source
-def determine_cookie_security_score(response_cookies, soup):
+def analyze_cookie_security(response_cookies, soup):
     cookies_set_via_meta_tags = False
     secure = True
     http_only = True
@@ -329,133 +309,104 @@ def determine_cookie_security_score(response_cookies, soup):
             if 'SameSite=Strict'.casefold() not in split_content:
                 same_site = False
 
-    score = 15
-    if cookies_set_via_meta_tags:
-        score -= 8
-    if not secure:
-        score -= 4
-    if not http_only:
-        score -= 2
-    if not same_site:
-        score -= 1
-    return score
+    return CookieSecurityResult(secure=secure,
+                                http_only=http_only,
+                                same_site=same_site,
+                                cookies_set_via_meta_tags=cookies_set_via_meta_tags)
 
 
-# return 0 if Expect-CT header is absent or max-age is missing
-# return 1 if in report-only mode
-# return 2 if in enforce(-and-report)-mode
-def determine_expect_ct_score(response_headers):
+def analyze_expect_ct(response_headers):
     expect_ct_header = response_headers.get('Expect-CT')
+    enforce_mode = False
+    report_mode = False
+    misconfigured_max_age = False
     if expect_ct_header is None:
-        return 0
-    if re.search('max-age=(\\d+)', expect_ct_header, flags=re.I) is None:
-        return 0
+        return ExpectCtResult(expect_ct_header_present=False,
+                              misconfigured_max_age=False,
+                              enforce_mode=False,
+                              report_mode=False)
     if 'enforce'.casefold() in expect_ct_header.casefold().split(','):
-        return 2
+        enforce_mode = True
     if 'report-uri="'.casefold() in expect_ct_header.casefold():
-        return 1
-    return 0
+        report_mode = True
+    if re.search('max-age=(\\d+)', expect_ct_header, flags=re.I) is None:
+        misconfigured_max_age = True
+    return ExpectCtResult(expect_ct_header_present=True,
+                          misconfigured_max_age=misconfigured_max_age,
+                          enforce_mode=enforce_mode,
+                          report_mode=report_mode)
 
 
-# return 1 if X-Download-Options: is set to noopen
-# return 0 otherwise
-def determine_x_download_options_score(response_headers):
+def analyze_x_download_options(response_headers):
     download_options_header = response_headers.get('X-Download-Options')
-    if download_options_header is None:
-        return 0
-    if 'noopen'.casefold() == download_options_header.casefold():
-        return 1
-    else:
-        return 0
+    if download_options_header and 'noopen'.casefold() == download_options_header.casefold():
+        return XDownloadOptionsResult(noopen=True)
+    return XDownloadOptionsResult(noopen=False)
 
 
-# return 1 if X-Frame-Options is set to DENY or SAMEORIGIN
-# return 0 otherwise
-def determine_x_frame_options_score(response_headers):
+def analyze_x_frame_options(response_headers):
     frame_options_header = response_headers.get('X-Frame-Options')
-    if frame_options_header is None:
-        return 0
-    if 'DENY'.casefold() == frame_options_header.casefold() \
-            or 'SAMEORIGIN'.casefold() == frame_options_header.casefold():
-        return 1
-    else:
-        return 0
+    if frame_options_header and 'DENY'.casefold() == frame_options_header.casefold():
+        return XFrameOptionsResult(deny=True, sameorigin=False)
+    if frame_options_header and 'SAMEORIGIN'.casefold() == frame_options_header.casefold():
+        return XFrameOptionsResult(deny=False, sameorigin=True)
+    return XFrameOptionsResult(deny=False, sameorigin=False)
 
 
-# return 0 if X-XSS-Protection is set to 0
-# return 1 if X-XSS-Protection header is absent
-# return 2 if X-XSS-Protection is set to 1
-def determine_x_xss_protection_score(response_headers):
+def analyze_x_xss_protection(response_headers):
     xss_protection_header = response_headers.get('X-XSS-Protection')
-    if xss_protection_header is None:
-        return 1
-    if '0' == xss_protection_header[0]:
-        return 0
-    if '1' == xss_protection_header[0]:
-        return 2
+    if xss_protection_header and '0' == xss_protection_header[0]:
+        return XXssProtectionResult(x_xss_protection_header_present=True, x_xss_protection_disabled=True)
+    if xss_protection_header and '1' == xss_protection_header[0]:
+        return XXssProtectionResult(x_xss_protection_header_present=True, x_xss_protection_disabled=False)
+    return XXssProtectionResult(x_xss_protection_header_present=False, x_xss_protection_disabled=False)
 
 
-# return 1 if X-Content-Type-Options is set to nosniff
-# return 0 otherwise
-def determine_x_content_type_options_score(response_headers):
+def analyze_x_content_type_options(response_headers):
     content_type_options_header = response_headers.get('X-Content-Type-Options')
-    if content_type_options_header is None:
-        return 0
-    if 'nosniff'.casefold() == content_type_options_header.casefold():
-        return 1
+    nosniff = False
+    if content_type_options_header and 'nosniff'.casefold() == content_type_options_header.casefold():
+        nosniff = True
+    return XContentTypeOptionsResult(nosniff=nosniff)
 
 
-# return 0 if no valid HPKP response header is present
-# return 1 if HPKP response header is present
-# add 1 if max-age is between 15 and 120 days
-# add 2 for includeSubDomains option
-def determine_hpkp_score(response_headers):
+def analyze_hpkp(response_headers):
     hpkp_header = response_headers.get('Public-Key-Pins')
     if hpkp_header is None:
-        return 0
+        return HpkpResult(hpkp_header_present=False, max_age=0, include_sub_domains=False)
     if 'pin-sha256'.casefold() not in hpkp_header.casefold():
-        return 0
+        return HpkpResult(hpkp_header_present=False, max_age=0, include_sub_domains=False)
 
     max_age_match = re.search('max-age=(\\d+)', hpkp_header, flags=re.I)
     if max_age_match is None:
-        return 0
+        return HpkpResult(hpkp_header_present=False, max_age=0, include_sub_domains=False)
     max_age = int(max_age_match.group(1))
-    if max_age < 15*24*60*60 or max_age > 120*24*60*60:
-        score = 1
-    else:
-        score = 2
-
+    include_sub_domains = False
     if 'includeSubDomains'.casefold() in hpkp_header.casefold():
-        score += 2
+        include_sub_domains = True
+    return HpkpResult(hpkp_header_present=True, max_age=max_age, include_sub_domains=include_sub_domains)
 
-    return score
 
-
-# return 0 if no valid HSTS response header is present
-# return 1 if HSTS response header is present but max-age is lower than 120 days
-# return 2 if HSTS response headers is present and max-age is higher than 120 days
-# add 2 for includeSubdomain option
-# add another 2 for preload option (includeSubdomain is mandatory in this case)
-def determine_hsts_score(response_headers):
+def analyze_hsts(response_headers):
     hsts_header = response_headers['Strict-Transport-Security']
     if hsts_header is None:
-        return 0
+        return HstsResult(hsts_header_present=False, max_age=0, include_sub_domains=False, preload=False)
 
     max_age_match = re.search('max-age=(\\d+)', hsts_header, flags=re.I)
     if max_age_match is None:
-        return 0
+        HstsResult(hsts_header_present=False, max_age=0, include_sub_domains=False, preload=False)
     max_age = int(max_age_match.group(1))
-    if max_age < 120*24*60*60:
-        score = 1
-    else:
-        score = 2
-
+    include_sub_domains = False
+    preload = False
     if 'includeSubDomains'.casefold() in hsts_header.casefold():
-        score += 2
+        include_sub_domains = True
         if 'preload'.casefold() in hsts_header.casefold():
-            score += 2
+            preload = True
 
-    return score
+    return HstsResult(hsts_header_present=True,
+                      max_age=max_age,
+                      include_sub_domains=include_sub_domains,
+                      preload=preload)
 
 
 def get_ssl_server_info(hostname):
@@ -535,130 +486,137 @@ def get_supported_tls_cipher_suites(hostname):
     }
 
 
-# return -1 if no accepted cipher suites were identified with any TLS version
-# return 0 if SSL 2.0 or 3.0 cipher suites are supported by the server
-# return 1 if weak TLS 1.0 or 1.1 cipher suites are supported by the server
-# or the server is missing TLS Fallback Signaling Cipher Suite Value support
-# return 2 for TLS 1.0 or 1.1 otherwise
-# return 3 for TLS 1.2+
-def determine_tls_score(hostname):
+def analyze_tls(hostname):
     supported_cipher_suites = get_supported_tls_cipher_suites(hostname)
+    ssl2_or_ssl3_accepted = False
+    weak_tls10_or_tls11_accepted = False
+    tls10_or_tls11_accepted = False
+    tls_12_or_higher_accepted = False
     if supported_cipher_suites['accepted_ssl2'] or supported_cipher_suites['accepted_ssl3']:
-        return 0
+        ssl2_or_ssl3_accepted = True
     if supported_cipher_suites['accepted_tls10'] or supported_cipher_suites['accepted_tls11']:
+        tls10_or_tls11_accepted = True
         weak_cipher_keywords = ['NULL', 'MD5', 'RC4', '3DES', 'EXPORT', 'anon']
         for accepted_suites in (supported_cipher_suites['accepted_tls10'] + supported_cipher_suites['accepted_tls11']):
             if not supported_cipher_suites['supports_fallback_scsv'] \
                     or any(x in accepted_suites for x in weak_cipher_keywords):
-                return 1
-        return 2
+                weak_tls10_or_tls11_accepted = True
+                break
     if supported_cipher_suites['accepted_tls12'] or supported_cipher_suites['accepted_tls13']:
-        return 3
-    return -1
+        tls_12_or_higher_accepted = True
+
+    return TlsResult(ssl2_or_ssl3_accepted=ssl2_or_ssl3_accepted,
+                     weak_tls10_or_tls11_accepted=weak_tls10_or_tls11_accepted,
+                     tls10_or_tls11_accepted=tls10_or_tls11_accepted,
+                     tls_12_or_higher_accepted=tls_12_or_higher_accepted)
 
 
-# return 0 if site does not redirect to https
-# return 4 for perfect redirection
-# subtract 2 if initial redirect is to different host
-# subtract 1 if redirection chain contains http site
-def determine_http_redirection_score(response):
-    score = 4
+def analyze_http_redirection(response):
+    initial_redirect_to_different_host = False
+    redirection_chain_contains_http = False
     if urlparse(response.url).scheme != 'https':
-        return 0
+        return HttpRedirectionResult(does_redirect_to_https=False,
+                                     initial_redirect_to_different_host=False,
+                                     redirection_chain_contains_http=False)
     # (1) Sites should avoid initial redirections to a different host, as this prevents HSTS from being set.
     initial_redirect = response.history[0]
     hostname_request = urlparse(initial_redirect.url).hostname
     hostname_redirect = urlparse(initial_redirect.headers['Location']).hostname
     if hostname_redirect != hostname_request:
-        score -= 2
+        initial_redirect_to_different_host = True
 
     # (2) In case of multiple redirections (Redirection Chain), every single redirection has to use HTTPS,
     # which prevents the traffic from being intercepted in cleartext.
     for redirect in response.history:
         if urlparse(redirect.headers['Location']).scheme != 'https':
-            score -= 1
+            redirection_chain_contains_http = True
             break
-    return score
+    return HttpRedirectionResult(does_redirect_to_https=True,
+                                 initial_redirect_to_different_host=initial_redirect_to_different_host,
+                                 redirection_chain_contains_http=redirection_chain_contains_http)
 
 
 def analyze(hostname):
-    # TODO set user-agent
-    response = requests.get(f'http://{hostname}', timeout=10)
-    # TODO handle timeout
-    redirected_hostname = urlparse(response.url).hostname
-    # phase 0
-    http_redirection_score = determine_http_redirection_score(response)
-    # phase 1
-    tls_score = determine_tls_score(redirected_hostname)
-    # phase 2
-    response = requests.get(f'https://{redirected_hostname}', timeout=10)
-    # TODO handle timeout
-    response_headers = response.headers
-    response_cookies = response.cookies
-    response_url = response.url
-    soup = BeautifulSoup(response.text, features='html.parser')
+    try:
+        # TODO set user-agent
+        response = requests.get(f'http://{hostname}', timeout=10)
+        # TODO handle timeout
+        redirected_hostname = urlparse(response.url).hostname
+        # phase 0
+        http_redirection_result = analyze_http_redirection(response)
+        # phase 1
+        tls_result = analyze_tls(redirected_hostname)
+        # phase 2
+        response = requests.get(f'https://{redirected_hostname}', timeout=10)
+        # TODO handle timeout
+        response_headers = response.headers
+        response_cookies = response.cookies
+        response_url = response.url
+        soup = BeautifulSoup(response.text, features='html.parser')
 
-    server = Server("browsermob-proxy-2.1.4\\bin\\browsermob-proxy")
-    server.start()
-    proxy = server.create_proxy()
-    options = webdriver.ChromeOptions()
-    options.add_argument(f'--proxy-server={proxy.proxy}')
-    driver = webdriver.Chrome(options=options)
-    proxy.new_har()
-    driver.get(f'https://{redirected_hostname}')
-    server.stop()
-    driver.quit()
+        server = Server("browsermob-proxy-2.1.4\\bin\\browsermob-proxy")
+        server.start()
+        proxy = server.create_proxy()
+        options = webdriver.ChromeOptions()
+        options.add_argument(f'--proxy-server={proxy.proxy}')
+        driver = webdriver.Chrome(options=options)
+        proxy.new_har()
+        driver.get(f'https://{redirected_hostname}')
+        server.stop()
+        driver.quit()
 
-    har_entries = proxy.har['log']['entries']
+        har_entries = proxy.har['log']['entries']
 
-    hsts_score = determine_hsts_score(response_headers)
-    hpkp_score = determine_hpkp_score(response_headers)
-    x_content_type_options_score = determine_x_content_type_options_score(response_headers)
-    x_xss_protection_score = determine_x_xss_protection_score(response_headers)
-    x_frame_options_score = determine_x_frame_options_score(response_headers)
-    x_download_options_score = determine_x_download_options_score(response_headers)
-    expect_ct_score = determine_expect_ct_score(response_headers)
-    # phase 3
-    cookie_security_score = determine_cookie_security_score(response_cookies, soup)
-    cors_policy_score = determine_cors_policy_score(response_headers, response_url)
-    csp_score = determine_csp_score(redirected_hostname)
-    csrf_score = determine_csrf_score(response_cookies, soup)
+        hsts_result = analyze_hsts(response_headers)
+        hpkp_result = analyze_hpkp(response_headers)
+        x_content_type_options_result = analyze_x_content_type_options(response_headers)
+        x_xss_protection_result = analyze_x_xss_protection(response_headers)
+        x_frame_options_result = analyze_x_frame_options(response_headers)
+        x_download_options_result = analyze_x_download_options(response_headers)
+        expect_ct_result = analyze_expect_ct(response_headers)
+        # phase 3
+        cookie_security_result = analyze_cookie_security(response_cookies, soup)
+        cors_policy_result = analyze_cors_policy(response_headers, response_url)
+        csp_result = analyze_csp(redirected_hostname)
+        csrf_result = analyze_csrf(response_cookies, soup)
 
-    cors_score = determine_cors_score(soup, har_entries)
-    referrer_policy_score = determine_referrer_policy_score(response_headers, response_url, soup, har_entries)
-    cache_control_score = determine_cache_control_score(response_headers, soup)
-    up_to_date_server_software_score = determine_up_to_date_server_software_score()
-    # phase 4
-    mixed_content_score = determine_mixed_content_score(har_entries)
-    sri_score = determine_sri_score(soup)
-    js_inclusion_cross_domain_existence_score = determine_cross_domain_existence_score(response_url, har_entries)
-    up_to_date_third_party_lib_score = determine_up_to_date_third_party_lib_score()
+        cors_result = analyze_cors(soup, har_entries)
+        referrer_policy_result = analyze_referrer_policy(response_headers, response_url, soup, har_entries)
+        cache_control_result = analyze_cache_control(response_headers, soup)
+        up_to_date_server_software_result = analyze_up_to_date_server_software()
+        # phase 4
+        mixed_content_result = analyze_mixed_content(har_entries)
+        sri_result = analyze_sri_protection(soup)
+        cross_domain_existence_result = analyze_cross_domain_existence(response_url, har_entries)
+        up_to_date_third_party_lib_result = analyze_up_to_date_third_party_libs()
 
-    results = {
-        'hostname': hostname,
-        'http_redirection_score': http_redirection_score,
-        'tls_score': tls_score,
-        'hsts_score': hsts_score,
-        'hpkp_score': hpkp_score,
-        'x_content_type_options_score': x_content_type_options_score,
-        'x_xss_protection_score': x_xss_protection_score,
-        'x_frame_options_score': x_frame_options_score,
-        'x_download_options_score': x_download_options_score,
-        'expect_ct_score': expect_ct_score,
-        'cookie_security_score': cookie_security_score,
-        'cors_policy_score': cors_policy_score,
-        'cors_score': cors_score,
-        'csp_score': csp_score,
-        'csrf_score': csrf_score,
-        'referrer_policy_score': referrer_policy_score,
-        'cache_control_score': cache_control_score,
-        'up_to_date_server_software_score': up_to_date_server_software_score,
-        'mixed_content_score': mixed_content_score,
-        'sri_score': sri_score,
-        'js_inclusion_cross_domain_existence_score': js_inclusion_cross_domain_existence_score,
-        'up_to_date_third_party_lib_score': up_to_date_third_party_lib_score
-    }
-    save_results(results)
+        result = SuccessResult(hostname=hostname,
+                               http_redirection_result=http_redirection_result,
+                               tls_result=tls_result,
+                               hsts_result=hsts_result,
+                               hpkp_result=hpkp_result,
+                               x_content_type_options_result=x_content_type_options_result,
+                               x_xss_protection_result=x_xss_protection_result,
+                               x_frame_options_result=x_frame_options_result,
+                               x_download_options_result=x_download_options_result,
+                               expect_ct_result=expect_ct_result,
+                               cookie_security_result=cookie_security_result,
+                               cors_policy_result=cors_policy_result,
+                               cors_result=cors_result,
+                               csp_result=csp_result,
+                               csrf_result=csrf_result,
+                               referrer_policy_result=referrer_policy_result,
+                               cache_control_result=cache_control_result,
+                               up_to_date_server_software_result=up_to_date_server_software_result,
+                               mixed_content_result=mixed_content_result,
+                               sri_result=sri_result,
+                               cross_domain_existence_result=cross_domain_existence_result,
+                               up_to_date_third_party_lib_result=up_to_date_third_party_lib_result
+                               )
+    except Exception as e:
+        result = ErrorResult(hostname=hostname, error_msg=str(e))
+
+    save_result(result)
 
 
 if __name__ == '__main__':
