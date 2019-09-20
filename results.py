@@ -1,8 +1,9 @@
+import datetime
 import enum
 from dataclasses import dataclass
 from typing import List, Dict
 
-from bs4 import BeautifulSoup
+import bs4
 
 
 @dataclass(frozen=True)
@@ -13,8 +14,8 @@ class CrossDomainExistenceResult:
 
 @dataclass(frozen=True)
 class SriResult:
-    protected_cors_script_and_link_tags: List[BeautifulSoup.Tag]
-    unprotected_cors_script_and_link_tags: List[BeautifulSoup.Tag]
+    protected_cors_script_and_link_tags: List[bs4.element.Tag]
+    unprotected_cors_script_and_link_tags: List[bs4.element.Tag]
 
 
 @dataclass(frozen=True)
@@ -156,7 +157,8 @@ class HttpRedirectionResult:
 
 @dataclass(frozen=True)
 class Result:
-    hostname: str
+    site: str
+    timestamp: datetime.datetime
 
 
 @dataclass(frozen=True)

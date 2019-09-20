@@ -1,4 +1,6 @@
+import datetime
 import re
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -33,14 +35,26 @@ def analyze_cross_domain_existence(response_url, har_entries):
     hostname = urlparse(response_url).hostname
     query_to_non_existing_domain = False
     non_existing_domains = []
+    checked_domains = []
     for entry in har_entries:
         url = entry['request']['url']
-        if urlparse(url).hostname != hostname:
+        entry_hostname = urlparse(url).hostname
+        if entry_hostname != hostname and entry_hostname not in checked_domains:
             try:
                 whois.whois(url)
+                checked_domains.append(entry_hostname)
             except whois.parser.PywhoisError:
                 query_to_non_existing_domain = True
                 non_existing_domains.append(url)
+            except ConnectionResetError:
+                # probably requests are too frequent, wait for a bit and try again
+                try:
+                    time.sleep(1)
+                    whois.whois(url)
+                    checked_domains.append(entry_hostname)
+                except whois.parser.PywhoisError:
+                    query_to_non_existing_domain = True
+                    non_existing_domains.append(url)
 
     return CrossDomainExistenceResult(query_to_non_existing_domain=query_to_non_existing_domain,
                                       non_existing_domains=non_existing_domains)
@@ -227,8 +241,10 @@ def analyze_csp(hostname):
     response = requests.post('https://csp-evaluator.withgoogle.com/getCSP', data={'url': f'https://{hostname}'})
     csp_list = response.json()['csp'].split(';')
     for x in csp_list:
-        key, value = x.split(maxsplit=1)
-        csp[key] = value
+        if x:
+            x = re.sub(r'\s+', ' ', x)
+            key, value = x.split(maxsplit=1)
+            csp[key] = value
 
     return CspResult(csp_present=True,
                      csp=csp,
@@ -536,19 +552,19 @@ def analyze_http_redirection(response):
                                  redirection_chain_contains_http=redirection_chain_contains_http)
 
 
-def analyze(hostname):
+def analyze(site):
     try:
+        site = re.sub(r'^https?://', '', site)
         # TODO set user-agent
-        response = requests.get(f'http://{hostname}', timeout=10)
-        # TODO handle timeout
+        response = requests.get(f'http://{site}', timeout=10)
         redirected_hostname = urlparse(response.url).hostname
+        redirected_site = re.sub(r'^https?://', '', response.url)
         # phase 0
         http_redirection_result = analyze_http_redirection(response)
         # phase 1
         tls_result = analyze_tls(redirected_hostname)
         # phase 2
-        response = requests.get(f'https://{redirected_hostname}', timeout=10)
-        # TODO handle timeout
+        response = requests.get(f'https://{redirected_site}', timeout=10)
         response_headers = response.headers
         response_cookies = response.cookies
         response_url = response.url
@@ -561,11 +577,11 @@ def analyze(hostname):
         options.add_argument(f'--proxy-server={proxy.proxy}')
         driver = webdriver.Chrome(options=options)
         proxy.new_har()
-        driver.get(f'https://{redirected_hostname}')
+        driver.get(f'https://{redirected_site}')
+        har_entries = proxy.har['log']['entries']
+        proxy.close()
         server.stop()
         driver.quit()
-
-        har_entries = proxy.har['log']['entries']
 
         hsts_result = analyze_hsts(response_headers)
         hpkp_result = analyze_hpkp(response_headers)
@@ -577,7 +593,7 @@ def analyze(hostname):
         # phase 3
         cookie_security_result = analyze_cookie_security(response_cookies, soup)
         cors_policy_result = analyze_cors_policy(response_headers, response_url)
-        csp_result = analyze_csp(redirected_hostname)
+        csp_result = analyze_csp(redirected_site)
         csrf_result = analyze_csrf(response_cookies, soup)
 
         cors_result = analyze_cors(soup, har_entries)
@@ -590,7 +606,8 @@ def analyze(hostname):
         cross_domain_existence_result = analyze_cross_domain_existence(response_url, har_entries)
         up_to_date_third_party_lib_result = analyze_up_to_date_third_party_libs()
 
-        result = SuccessResult(hostname=hostname,
+        result = SuccessResult(site=site,
+                               timestamp=datetime.datetime.now(),
                                http_redirection_result=http_redirection_result,
                                tls_result=tls_result,
                                hsts_result=hsts_result,
@@ -614,7 +631,9 @@ def analyze(hostname):
                                up_to_date_third_party_lib_result=up_to_date_third_party_lib_result
                                )
     except Exception as e:
-        result = ErrorResult(hostname=hostname, error_msg=str(e))
+        result = ErrorResult(site=site, timestamp=datetime.datetime.now(), error_msg=str(e))
+        # TODO remove debug raise
+        raise e
 
     save_result(result)
 
@@ -622,6 +641,6 @@ def analyze(hostname):
 if __name__ == '__main__':
     # analyze('google.com')
     # analyze('github.com')
-    analyze('vr-bank.de')
-    # analyze('sparkasse.de')
+    # analyze('vr-bank.de')
+    analyze('sparkasse.de')
     # analyze('sparkasse-nuernberg.de')

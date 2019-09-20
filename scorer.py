@@ -251,6 +251,13 @@ class Scorer:
             score -= 1
         return score
 
+    def total_score(self):
+        # TODO
+        weights = {
+            'http_redirection': 25
+        }
+        return self.http_redirection_score()*weights['http_redirection']
+
     @classmethod
     def init_from_database(cls, database_name, collection_name, result_id):
         col = pymongo.MongoClient().get_database(name=database_name).get_collection(name=collection_name)
