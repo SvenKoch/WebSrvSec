@@ -1,3 +1,5 @@
+jsons
+flask
 pymongo
 python-whois
 browsermob-proxy

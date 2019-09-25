@@ -26,11 +26,6 @@ from results import CrossDomainExistenceResult, SriResult, MixedContentResult, U
     ErrorResult
 
 
-def save_result(results):
-    # TODO
-    print(results)
-
-
 def analyze_cross_domain_existence(response_url, har_entries):
     hostname = urlparse(response_url).hostname
     query_to_non_existing_domain = False
@@ -267,7 +262,7 @@ def analyze_cors(soup, har_entries):
 
 
 def analyze_cors_policy(response_headers, response_url):
-    access_control_allow_origin_header = response_headers.get('Access-Control-Allow-Origin')
+    access_control_allow_origin_header = response_headers.get('Access-Control-Allow-Origin', '')
     x_permitted_cross_domain_policies_header = response_headers.get('X-Permitted-Cross-Domain-Policies')
     x_permitted_cross_domain_policies_set_to_none = False
     lazy_wildcard = False
@@ -635,7 +630,7 @@ def analyze(site):
         # TODO remove debug raise
         raise e
 
-    save_result(result)
+    return result
 
 
 if __name__ == '__main__':

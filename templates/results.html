@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Results
+{% endblock title %}
+
+{% block content %}
+
+{% macro score_badge(score) -%}
+{% if score > 80 %}
+<span class="badge badge-success">{{ score }}</span>
+{% elif score > 40 %}
+<span class="badge badge-warning">{{ score }}</span>
+{% else %}
+<span class="badge badge-danger">{{ score }}</span>
+{% endif %}
+{%- endmacro %}
+
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#general">General</div>
+    <div class="card-body collapse show" id="general">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td>Site</td>
+                    <td><a href="https://{{ results.site }}">{{ results.site }}</a></td>
+                </tr>
+                <tr>
+                    <td>Score</td>
+                    <td>{{ score_badge(scores['total_score']) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<hr>
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#https">HTTPS</div>
+    <div class="card-body collapse show" id="https">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td>HTTP Redirection</td>
+                    <td>{{ score_badge(scores['http_redirection_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>TLS</td>
+                    <td>{{ score_badge(scores['tls_score']) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<hr>
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#header">Header</div>
+    <div class="card-body collapse show" id="header">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td>HTTP Strict Transport Security</td>
+                    <td>{{ score_badge(scores['hsts_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>HTTP Public Key Pinning</td>
+                    <td>{{ score_badge(scores['hpkp_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-Content-Type-Options</td>
+                    <td>{{ score_badge(scores['x_content_type_options_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-XSS-Protection</td>
+                    <td>{{ score_badge(scores['x_xss_protection_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-Frame-Options</td>
+                    <td>{{ score_badge(scores['x_frame_options_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-Download-Options</td>
+                    <td>{{ score_badge(scores['x_download_options_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Expect-CT</td>
+                    <td>{{ score_badge(scores['expect_ct_score']) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<hr>
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#headerAndSource">Header And Source</div>
+    <div class="card-body collapse show" id="headerAndSource">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td>Cookie Security</td>
+                    <td>{{ score_badge(scores['cookie_security_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cross Origin Resource Sharing (Incoming)</td>
+                    <td>{{ score_badge(scores['cors_policy_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Cross Origin Resource Sharing (Outgoing)</td>
+                    <td>{{ score_badge(scores['cors_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Content Security Policy</td>
+                    <td>{{ score_badge(scores['csp_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cross-Site Request Forgery</td>
+                    <td>{{ score_badge(scores['csrf_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Referrer-Policy</td>
+                    <td>{{ score_badge(scores['referrer_policy_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cache-Control</td>
+                    <td>{{ score_badge(scores['cache_control_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Up To Date Server Software Score</td>
+                    <td>{{ score_badge(scores['up_to_date_server_software_score']) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<hr>
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#source">Source And Outgoing Requests</div>
+    <div class="card-body collapse show" id="source">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td>Up To Date Third Party Libraries</td>
+                    <td>{{ score_badge(scores['up_to_date_third_party_lib_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Mixed Content</td>
+                    <td>{{ score_badge(scores['mixed_content_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Subresource Integrity</td>
+                    <td>{{ score_badge(scores['sri_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cross Domain Existence</td>
+                    <td>{{ score_badge(scores['cross_domain_existence_score']) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock content %}

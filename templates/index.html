@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Index
+{% endblock title %}
+
+{% block content %}
+
+<div class="jumbotron">
+    <h2>Scan Your Site For Security And Privacy Features</h2>
+    <hr>
+    <form id="scanForm" method="post" action="{{ url_for('scan') }}" name="scan">
+        <input type="hidden" name="rescan" value="0">
+        <div class="form-row">
+            <div class="col">
+                <input class="form-control form-control-lg" type="text" name="address" placeholder="Enter address" autofocus>
+            </div>
+            <div class="col-2">
+                <button id="scanBtn" class="btn btn-primary btn-lg" type="submit">Scan</button>
+                <button id="loadBtn" class="btn" disabled hidden><span class="spinner-border"></span></button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock content %}

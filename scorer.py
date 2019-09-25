@@ -7,9 +7,13 @@ class Scorer:
     def __init__(self, result: results.SuccessResult):
         self.result = result
 
+    def up_to_date_server_software_score(self):
+        # TODO
+        return -1
+
     def up_to_date_third_party_lib_score(self):
         # TODO
-        pass
+        return -1
 
     # return 0 if any cross-domain requests query non-existing domains
     # return 1 otherwise

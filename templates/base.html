@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+
+    <title>WebSrvSec | {% block title %}{% endblock title %}</title>
+</head>
+<body>
+    <header class="container text-center">
+        <a href="/"><h1>WebSrvSec</h1></a>
+    </header>
+    <div class="container">
+        {% block content %}{% endblock content%}
+    </div>
+    <!-- jQuery 3 -->
+    <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <!-- Bootstrap and Popper -->
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script type="text/javascript">
+        $(function(){
+            $("#scanBtn").click(function(e) {
+                $("#scanBtn").hide();
+                $("#loadBtn").removeAttr('hidden');
+            });
+        });
+    </script>
+    {% block scripts %}{% endblock scripts %}
+</body>
+</html>
