@@ -57,7 +57,9 @@ def analyze_cross_domain_existence(response_url, har_entries):
 
 def analyze_sri_protection(soup):
     cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True)
+    cors_script_and_link_tags = [str(x) for x in cors_script_and_link_tags]
     protected_cors_script_and_link_tags = soup.find_all(['script', 'link'], crossorigin=True, integrity=True)
+    protected_cors_script_and_link_tags = [str(x) for x in protected_cors_script_and_link_tags]
     unprotected_cors_script_and_link_tags = \
         list(set(cors_script_and_link_tags).difference(protected_cors_script_and_link_tags))
 
@@ -97,7 +99,7 @@ def analyze_cache_control(response_headers, soup):
     pragma_no_cache = False
 
     for meta_tag in soup.find_all('meta', attrs={'http-equiv': re.compile('^cache-control$', re.I)}):
-        match = re.search('content="(.+)"', meta_tag, re.I)
+        match = re.search('content="(.+)"', str(meta_tag), re.I)
         if match:
             meta_content = match.group(1)
             if cache_control:
@@ -106,7 +108,7 @@ def analyze_cache_control(response_headers, soup):
                 cache_control = meta_content
 
     for meta_tag in soup.find_all('meta', attrs={'http-equiv': re.compile('^pragma$', re.I)}):
-        match = re.search('content="(.+)"', meta_tag, re.I)
+        match = re.search('content="(.+)"', str(meta_tag), re.I)
         if match:
             meta_content = match.group(1)
             if pragma:
@@ -157,7 +159,7 @@ def analyze_referrer_policy(response_headers, response_url, soup, har_entries):
     meta_policy = ''
     multiple_meta_policies = False
     for meta_tag in soup.find_all('meta', attrs={'name': re.compile('^referrer$', re.I)}):
-        match = re.search('content="(.+)"', meta_tag, re.I)
+        match = re.search('content="(.+)"', str(meta_tag), re.I)
         if match:
             if meta_policy and match.group(1) != meta_policy:
                 multiple_meta_policies = True
@@ -200,7 +202,7 @@ def analyze_csrf(response_cookies, soup):
 
 def analyze_csp(hostname):
     highest_severity_finding = Severity.AllGood
-    csp = {}
+    csp = []
     driver = webdriver.Chrome()
     driver.get('https://csp-evaluator.withgoogle.com')
     textarea = driver.find_element_by_tag_name('textarea')
@@ -234,12 +236,8 @@ def analyze_csp(hostname):
         highest_severity_finding = Severity.PossiblyMedium
 
     response = requests.post('https://csp-evaluator.withgoogle.com/getCSP', data={'url': f'https://{hostname}'})
-    csp_list = response.json()['csp'].split(';')
-    for x in csp_list:
-        if x:
-            x = re.sub(r'\s+', ' ', x)
-            key, value = x.split(maxsplit=1)
-            csp[key] = value
+    csp = response.json()['csp'].split(';')
+    csp = [re.sub(r'\s+', ' ', x) for x in csp]
 
     return CspResult(csp_present=True,
                      csp=csp,
@@ -307,7 +305,7 @@ def analyze_cookie_security(response_cookies, soup):
     if set_cookie_metas:
         cookies_set_via_meta_tags = True
     for cookie in set_cookie_metas:
-        match = re.search('content="(.*)"', cookie, re.I)
+        match = re.search('content="(.*)"', str(cookie), re.I)
         if match:
             content = match.group(1)
             split_content = [x.casefold() for x in content.split(';')]
@@ -627,13 +625,4 @@ def analyze(site):
                                )
     except Exception as e:
         result = ErrorResult(site=site, timestamp=datetime.datetime.now(), error_msg=str(e))
-
     return result
-
-
-if __name__ == '__main__':
-    # analyze('google.com')
-    # analyze('github.com')
-    # analyze('vr-bank.de')
-    analyze('sparkasse.de')
-    # analyze('sparkasse-nuernberg.de')

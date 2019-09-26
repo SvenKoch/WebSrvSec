@@ -1,9 +1,7 @@
 import datetime
 import enum
 from dataclasses import dataclass
-from typing import List, Dict
-
-import bs4
+from typing import List
 
 
 @dataclass(frozen=True)
@@ -14,8 +12,8 @@ class CrossDomainExistenceResult:
 
 @dataclass(frozen=True)
 class SriResult:
-    protected_cors_script_and_link_tags: List[bs4.element.Tag]
-    unprotected_cors_script_and_link_tags: List[bs4.element.Tag]
+    protected_cors_script_and_link_tags: List[str]
+    unprotected_cors_script_and_link_tags: List[str]
 
 
 @dataclass(frozen=True)
@@ -68,7 +66,7 @@ class Severity(enum.Enum):
 @dataclass(frozen=True)
 class CspResult:
     csp_present: bool
-    csp: Dict[str, str]
+    csp: List[str]
     highest_severity_finding: Severity
     timeout_on_csp_evaluator: bool
 

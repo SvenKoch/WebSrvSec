@@ -50,9 +50,10 @@ def scan():
 @app.route('/formerScans')
 def former_scans():
     site = request.args.get('q', default='')
-    if not site:
-        return render_template('formerScans.html', site=site, formerScans=[])
-    docs = collection.find({'site': site}, limit=20)
+    if site:
+        docs = collection.find({'site': site}).sort("timestamp", pymongo.DESCENDING).limit(20)
+    else:
+        docs = collection.find({}).sort("timestamp", pymongo.DESCENDING).limit(20)
     scans = []
     for doc in docs:
         res = jsons.load(doc, SuccessResult)
