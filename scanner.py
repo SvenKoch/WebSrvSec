@@ -283,8 +283,6 @@ def analyze_cors_policy(response_headers, response_url):
     if clientaccesspolicy_xml.status_code == 200:
         clientaccesspolicy_xml_present = True
 
-    # TODO nice to have: analyze XML files if present
-
     return CorsPolicyResult(access_control_allow_origin_header=access_control_allow_origin_header,
                             lazy_wildcard=lazy_wildcard,
                             x_permitted_cross_domain_policies_set_to_none=x_permitted_cross_domain_policies_set_to_none,
@@ -550,8 +548,9 @@ def analyze_http_redirection(response):
 def analyze(site):
     try:
         site = re.sub(r'^https?://', '', site)
-        # TODO set user-agent
-        response = requests.get(f'http://{site}', timeout=10)
+        user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36'
+        ie_user_agent = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
+        response = requests.get(f'http://{site}', timeout=10, headers={'User-Agent': user_agent})
         redirected_hostname = urlparse(response.url).hostname
         redirected_site = re.sub(r'^https?://', '', response.url)
         # phase 0
@@ -559,7 +558,8 @@ def analyze(site):
         # phase 1
         tls_result = analyze_tls(redirected_hostname)
         # phase 2
-        response = requests.get(f'https://{redirected_site}', timeout=10)
+        response = requests.get(f'https://{redirected_site}', timeout=10, headers={'User-Agent': user_agent})
+        response_ie = requests.get(f'https://{redirected_site}', timeout=10, headers={'User-Agent': ie_user_agent})
         response_headers = response.headers
         response_cookies = response.cookies
         response_url = response.url
@@ -583,7 +583,7 @@ def analyze(site):
         x_content_type_options_result = analyze_x_content_type_options(response_headers)
         x_xss_protection_result = analyze_x_xss_protection(response_headers)
         x_frame_options_result = analyze_x_frame_options(response_headers)
-        x_download_options_result = analyze_x_download_options(response_headers)
+        x_download_options_result = analyze_x_download_options(response_ie.headers)
         expect_ct_result = analyze_expect_ct(response_headers)
         # phase 3
         cookie_security_result = analyze_cookie_security(response_cookies, soup)
@@ -627,8 +627,6 @@ def analyze(site):
                                )
     except Exception as e:
         result = ErrorResult(site=site, timestamp=datetime.datetime.now(), error_msg=str(e))
-        # TODO remove debug raise
-        raise e
 
     return result
 

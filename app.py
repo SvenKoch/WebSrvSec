@@ -2,12 +2,11 @@ import re
 
 import bson
 import jsons
-
 import pymongo
 from bson import ObjectId
-from flask import Flask, render_template, request, abort, redirect, url_for
+from flask import Flask, render_template, request, abort, redirect
 
-from results import SuccessResult
+from results import SuccessResult, ErrorResult
 from scanner import analyze
 from scorer import Scorer
 
@@ -40,6 +39,8 @@ def scan():
     rescan = request.form['rescan']
     if rescan == '1' or not collection.find_one({'site': site}):
         res = analyze(site)
+        if isinstance(res, ErrorResult):
+            return render_template('error.html', error=res.error_msg)
         results_id = save_results(res)
         return redirect(f'/results/{results_id}')
     else:
