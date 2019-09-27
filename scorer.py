@@ -121,15 +121,12 @@ class Scorer:
         # no-referrer-when-downgrade is default
         return 20
 
-    # return 0 if no csrf token was found but a form is present
-    # return 90 if no csrf token was found but no form was present
-    #   or if csrf token was found
+    # return 100 if a csrf token was found
+    # return 0 otherwise
     def csrf_score(self):
         if self.result.csrf_result.csrf_token_found:
             return 100
-        if self.result.csrf_result.form_present:
-            return 0
-        return 90
+        return 0
 
     # return -1 on timeout
     # return 0 if no Content Security Policy is found
@@ -163,9 +160,9 @@ class Scorer:
         return 100
 
     # return 0 if Access-Control-Allow-Origin header is set to *
-    # return 20 if Access-Control-Allow-Origin header is present
-    # return 80 if Access-Control-Allow-Origin header is absent
-    # add 20 for X-Permitted-Cross-Domain-Policies: none
+    # return 80 if Access-Control-Allow-Origin header is present
+    # return 90 if Access-Control-Allow-Origin header is absent
+    # add 10 for X-Permitted-Cross-Domain-Policies: none
     # or if neither crossdomain.xml nor clientaccesspolicy.xml are present
     def cors_policy_score(self):
         if self.result.cors_policy_result.lazy_wildcard:
@@ -183,17 +180,17 @@ class Scorer:
 
     # return 100 if all cookies contain the Secure, HttpOnly and SameSite=Strict directives and are set via header
     # subtract 10 for missing SameSite directive
-    # subtract 60 for missing HttpOnly directive
-    # subtract 60 for missing Secure directive
+    # subtract 50 for missing HttpOnly directive
+    # subtract 50 for missing Secure directive
     # subtract 20 for cookies set via meta tag in HTML source
     def cookie_security_score(self):
         score = 100
         if self.result.cookie_security_result.cookies_set_via_meta_tags:
             score -= 20
         if not self.result.cookie_security_result.secure:
-            score -= 60
+            score -= 50
         if not self.result.cookie_security_result.http_only:
-            score -= 60
+            score -= 50
         if not self.result.cookie_security_result.same_site:
             score -= 10
         return max(0, score)
@@ -225,11 +222,11 @@ class Scorer:
         return 0
 
     # return 0 if X-XSS-Protection is set to 0
-    # return 80 if X-XSS-Protection header is absent or set
+    # return 70 if X-XSS-Protection header is absent
     # return 100 if X-XSS-Protection is set to 1
     def x_xss_protection_score(self):
         if not self.result.x_xss_protection_result.x_xss_protection_header_present:
-            return 80
+            return 70
         if self.result.x_xss_protection_result.x_xss_protection_disabled:
             return 0
         return 100
@@ -258,37 +255,37 @@ class Scorer:
         return score
 
     # return 0 if no valid HSTS response header is present
-    # return 40 if HSTS response header is present but max-age is lower than 120 days
-    # return 60 if HSTS response headers is present and max-age is higher than 120 days
-    # add 20 for includeSubDomains option
-    # add another 20 for preload option (includeSubDomains is mandatory in this case)
+    # return 60 if HSTS response header is present but max-age is lower than 120 days
+    # return 80 if HSTS response headers is present and max-age is higher than 120 days
+    # add 10 for includeSubDomains option
+    # add another 10 for preload option (includeSubDomains is mandatory in this case)
     def hsts_score(self):
         if not self.result.hsts_result.hsts_header_present:
             return 0
         if self.result.hsts_result.max_age < 120 * 24 * 60 * 60:
-            score = 40
-        else:
             score = 60
+        else:
+            score = 80
         if self.result.hsts_result.include_sub_domains:
-            score += 20
+            score += 10
             if self.result.hsts_result.preload:
-                score += 20
+                score += 10
         return score
 
     # return 0 if
     #   - no accepted cipher suites were identified with any TLS version
     #   - SSL 2.0 or 3.0 cipher suites are supported by the server
-    # return 20 if weak TLS 1.0 or 1.1 cipher suites are supported by the server
+    # return 10 if weak TLS 1.0 or 1.1 cipher suites are supported by the server
     #       or the server is missing TLS Fallback Signaling Cipher Suite Value support
-    # return 80 for TLS 1.0 or 1.1 otherwise
+    # return 90 for TLS 1.0 or 1.1 otherwise
     # return 100 for TLS 1.2+
     def tls_score(self):
         if self.result.tls_result.ssl2_or_ssl3_accepted:
             return 0
         if self.result.tls_result.tls10_or_tls11_accepted:
             if self.result.tls_result.weak_tls10_or_tls11_accepted:
-                return 20
-            return 80
+                return 10
+            return 90
         if self.result.tls_result.tls_12_or_higher_accepted:
             return 100
         return 0
@@ -322,7 +319,7 @@ class Scorer:
             'cors': 1,
             'cors_policy': 1,
             'cookie_security': 1,
-            'x_download_options': 0.5,
+            'x_download_options': 0.2,
             'x_frame_options': 1,
             'x_xss_protection': 1,
             'x_content_type_options': 1,

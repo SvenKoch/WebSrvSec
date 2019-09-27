@@ -7,9 +7,9 @@ Results
 {% block content %}
 
 {% macro score_badge(score) -%}
-{% if score > 80 %}
+{% if score >= 80 %}
 <span class="badge badge-success">{{ score }}</span>
-{% elif score > 40 %}
+{% elif score >= 40 %}
 <span class="badge badge-warning">{{ score }}</span>
 {% else %}
 <span class="badge badge-danger">{{ score }}</span>
@@ -34,134 +34,328 @@ Results
     </div>
 </div>
 <hr>
-<div class="card border">
-    <div class="card-header" data-toggle="collapse" data-target="#https">HTTPS</div>
-    <div class="card-body collapse show" id="https">
+<div class="card border-danger">
+    <div class="card-header" data-toggle="collapse" data-target="#issues">Issues</div>
+    <div class="card-body collapse show" id="issues">
         <table class="table">
+            <thead>
+                <tr>
+                    <th>Issue</th>
+                    <th>Fix</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
             <tbody>
+                {% if not results.http_redirection_result.does_redirect_to_https %}
                 <tr>
-                    <td>HTTP Redirection</td>
-                    <td>{{ score_badge(scores['http_redirection_score']) }}</td>
+                    <td>HTTP does not redirect to HTTPS </td>
+                    <td>Deploy HTTP redirection</td>
+                    <td>Critical</td>
                 </tr>
+                {% endif %}
+                {% if results.http_redirection_result.redirection_chain_contains_http %}
                 <tr>
-                    <td>TLS</td>
-                    <td>{{ score_badge(scores['tls_score']) }}</td>
+                    <td>HTTPS redirection chain contains redirection to HTTP</td>
+                    <td>Redirect to HTTPS only</td>
+                    <td>Very High</td>
                 </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-<hr>
-<div class="card border">
-    <div class="card-header" data-toggle="collapse" data-target="#header">Header</div>
-    <div class="card-body collapse show" id="header">
-        <table class="table">
-            <tbody>
+                {% endif %}
+                {% if results.http_redirection_result.initial_redirect_to_different_host %}
                 <tr>
-                    <td>HTTP Strict Transport Security</td>
-                    <td>{{ score_badge(scores['hsts_score']) }}</td>
+                    <td>Initial HTTPS redirection to different host</td>
+                    <td>Point first redirection to same host to enable HSTS</td>
+                    <td>High</td>
                 </tr>
+                {% endif %}
+                {% if results.tls_result.ssl2_or_ssl3_accepted %}
                 <tr>
-                    <td>HTTP Public Key Pinning</td>
-                    <td>{{ score_badge(scores['hpkp_score']) }}</td>
+                    <td>SSL 2.0 or 3.0 accepted</td>
+                    <td>Disable support for SSL 2.0 and 3.0</td>
+                    <td>Critical</td>
                 </tr>
+                {% endif %}
+                {% if results.tls_result.weak_tls10_or_tls11_accepted %}
                 <tr>
-                    <td>X-Content-Type-Options</td>
-                    <td>{{ score_badge(scores['x_content_type_options_score']) }}</td>
+                    <td>Weak cipher suites for TLS 1.0 or 1.1 accepted</td>
+                    <td>Disable support for weak cipher suites</td>
+                    <td>Critical</td>
                 </tr>
+                {% endif %}
+                {% if results.tls_result.tls10_or_tls11_accepted %}
                 <tr>
-                    <td>X-XSS-Protection</td>
-                    <td>{{ score_badge(scores['x_xss_protection_score']) }}</td>
+                    <td>Soon outdated TLS 1.0 or 1.1</td>
+                    <td>Only support TLS 1.2+</td>
+                    <td>Low</td>
                 </tr>
+                {% endif %}
+                {% if not results.hsts_result.hsts_header_present %}
                 <tr>
-                    <td>X-Frame-Options</td>
-                    <td>{{ score_badge(scores['x_frame_options_score']) }}</td>
+                    <td>No Strict-Transport-Security header present</td>
+                    <td>Add a Strict-Transport-Security header to responses</td>
+                    <td>High</td>
                 </tr>
-                <tr>
-                    <td>X-Download-Options</td>
-                    <td>{{ score_badge(scores['x_download_options_score']) }}</td>
-                </tr>
-                 <tr>
-                    <td>Expect-CT</td>
-                    <td>{{ score_badge(scores['expect_ct_score']) }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-<hr>
-<div class="card border">
-    <div class="card-header" data-toggle="collapse" data-target="#headerAndSource">Header And Source</div>
-    <div class="card-body collapse show" id="headerAndSource">
-        <table class="table">
-            <tbody>
-                <tr>
-                    <td>Cookie Security</td>
-                    <td>{{ score_badge(scores['cookie_security_score']) }}</td>
-                </tr>
-                <tr>
-                    <td>Cross Origin Resource Sharing (Incoming)</td>
-                    <td>{{ score_badge(scores['cors_policy_score']) }}</td>
-                </tr>
-                 <tr>
-                    <td>Cross Origin Resource Sharing (Outgoing)</td>
-                    <td>{{ score_badge(scores['cors_score']) }}</td>
-                </tr>
-                <tr>
-                    <td>Content Security Policy</td>
-                    <td>{{ score_badge(scores['csp_score']) }}</td>
-                </tr>
-                <tr>
-                    <td>Cross-Site Request Forgery</td>
-                    <td>{{ score_badge(scores['csrf_score']) }}</td>
-                </tr>
-                 <tr>
-                    <td>Referrer-Policy</td>
-                    <td>{{ score_badge(scores['referrer_policy_score']) }}</td>
-                </tr>
-                <tr>
-                    <td>Cache-Control</td>
-                    <td>{{ score_badge(scores['cache_control_score']) }}</td>
-                </tr>
-                <tr>
-                    <td>Leaking Server Software Info Score</td>
-                    <td>{{ score_badge(scores['leaking_server_software_info_score']) }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-<hr>
-<div class="card border">
-    <div class="card-header" data-toggle="collapse" data-target="#source">Source And Outgoing Requests</div>
-    <div class="card-body collapse show" id="source">
-        <table class="table">
-            <tbody>
-                <tr>
-                    <td>Third Party Libraries</td>
-                    <td><span class="badge badge-info">Info</span></td>
-                </tr>
-                <tr>
-                    <td>Mixed Content</td>
-                    <td>{{ score_badge(scores['mixed_content_score']) }}</td>
-                </tr>
-                 <tr>
-                    <td>Subresource Integrity</td>
-                    <td>{{ score_badge(scores['sri_score']) }}</td>
-                </tr>
-                <tr>
-                    <td>Cross Domain Existence</td>
-                    <td>{{ score_badge(scores['cross_domain_existence_score']) }}</td>
-                </tr>
+                {% else %}
+                    {% if results.hsts_result.max_age < 120 * 24 * 60 * 60 %}
+                    <tr>
+                        <td>Strict-Transport-Security max-age is lower than 120 days</td>
+                        <td>Set max-age for Strict-Transport-Security to at least 120 days</td>
+                        <td>Medium</td>
+                    </tr>
+                    {% endif %}
+                    {% if not results.hsts_result.include_sub_domains %}
+                    <tr>
+                        <td>Strict-Transport-Security does not include includeSubDomains directive</td>
+                        <td>Set includeSubDomains directive for Strict-Transport-Security</td>
+                        <td>Low</td>
+                    </tr>
+                    {% endif %}
+                    {% if not results.hsts_result.preload %}
+                    <tr>
+                        <td>Strict-Transport-Security does not include preload directive</td>
+                        <td>Set preload directive for Strict-Transport-Security</td>
+                        <td>Low</td>
+                    </tr>
+                    {% endif %}
+                {% endif %}
+                {% if not results.x_content_type_options_result.nosniff %}
+                    <tr>
+                        <td>X-Content-Type-Options header not set to nosniff</td>
+                        <td>Set X-Content-Type-Options header to nosniff</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if results.x_xss_protection_result.x_xss_protection_disabled %}
+                    <tr>
+                        <td>X-XSS-Protection header set to 0</td>
+                        <td>Set X-XSS-Protection header to 1</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if not results.x_xss_protection_result.x_xss_protection_header_present %}
+                    <tr>
+                        <td>X-XSS-Protection header absent</td>
+                        <td>Set X-XSS-Protection header to 1</td>
+                        <td>Medium</td>
+                    </tr>
+                {% endif %}
+                {% if not results.x_frame_options_result.deny and not results.x_frame_options_result.sameorigin %}
+                    <tr>
+                        <td>X-Frame-Options header not set to DENY or SAMEORIGIN</td>
+                        <td>Set X-Frame-Options header to DENY or SAMEORIGIN</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if not results.x_download_options_result.noopen %}
+                    <tr>
+                        <td>X-Download-Options header not set to noopen</td>
+                        <td>Set X-Download-Options header to noopen</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cookie_security_result.secure %}
+                    <tr>
+                        <td>Cookie does not have Secure flag set</td>
+                        <td>Set Secure flag for all cookies</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cookie_security_result.http_only %}
+                    <tr>
+                        <td>Cookie does not have HttpOnly flag set</td>
+                        <td>Set HttpOnly flag for all cookies</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if results.cookie_security_result.cookies_set_via_meta_tags %}
+                    <tr>
+                        <td>Cookies are set via meta tags</td>
+                        <td>Set all cookies via header</td>
+                        <td>Medium</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cookie_security_result.same_site %}
+                    <tr>
+                        <td>Cookie does not have SameSite flag set</td>
+                        <td>Set SameSite flag for all cookies</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.cors_policy_result.lazy_wildcard %}
+                    <tr>
+                        <td>Access-Control-Allow-Origin header is set to *</td>
+                        <td>Restrict cross origin resource sharing access unless the site is a CDN</td>
+                        <td>High</td>
+                    </tr>
+                {% elif results.cors_policy_result.access_control_allow_origin_header %}
+                    <tr>
+                        <td>Access-Control-Allow-Origin header is present</td>
+                        <td>Restrict cross origin resource sharing access unless the site is a CDN</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cors_policy_result.x_permitted_cross_domain_policies_set_to_none %}
+                    <tr>
+                        <td>X-Permitted-Cross-Domain-Policies is present and not set to none</td>
+                        <td>Restrict cross origin resource sharing access unless the site is a CDN</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.cors_policy_result.crossdomain_xml_present %}
+                    <tr>
+                        <td>crossdomain.xml file is present</td>
+                        <td>Restrict cross origin resource sharing access unless the site is a CDN</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.cors_policy_result.clientaccesspolicy_xml_present %}
+                    <tr>
+                        <td>clientaccesspolicy.xml file is present</td>
+                        <td>Restrict cross origin resource sharing access unless the site is a CDN</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.cors_result.cross_origin_use_credentials %}
+                    <tr>
+                        <td>Cross origin resource requests use credentials</td>
+                        <td>set crossorigin="anonymous" attributes for cross origin resource requests</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if results.csp_result.timeout_on_csp_evaluator %}
+                    <tr>
+                        <td>Timeout when trying to evaluate Content Security Policy</td>
+                        <td>Manually test CSP with the <a href="https://csp-evaluator.withgoogle.com">CSP evaluator</a></td>
+                        <td></td>
+                    </tr>
+                {% else %}
+                    {% if not results.csp_result.csp_present %}
+                        <tr>
+                            <td>Content security policy is missing</td>
+                            <td>Provide a secure content security policy</td>
+                            <td>High</td>
+                        </tr>
+                    {% else %}
+                        {% if results.csp_result.highest_severity_finding != "AllGood" %}
+                            <tr>
+                                <td>Negative findings when evaluating Content Security Policy</td>
+                                <td>Use the <a href="https://csp-evaluator.withgoogle.com">CSP evaluator</a> to get suggestions</td>
+                                <td>High</td>
+                            </tr>
+                        {% endif %}
+                    {% endif %}
+                {% endif %}
+                {% if results.referrer_policy_result.referrer_policy_header != 'no-referrer' and results.referrer_policy_result.referrer_policy_header != 'same-origin' %}
+                    <tr>
+                        <td>Referrer-Policy is not set to no-referrer or same-origin</td>
+                        <td>Set Referrer-Policy to no-referrer or same-origin</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if results.referrer_policy_result.multiple_meta_policies %}
+                    <tr>
+                        <td>Multiple Referrer-Policy meta tags were found</td>
+                        <td>Only set one Referrer-Policy</td>
+                        <td>Info</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cache_control_result.private_directive or not results.cache_control_result.no_store_directive %}
+                    <tr>
+                        <td>Cache-Control does not contain private and no-store directives </td>
+                        <td>Set Cache-Control to private, no-cache, no-store, must-revalidate, max-age=0</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cache_control_result.no_cache_directive or not results.cache_control_result.must_revalidate or not results.cache_control_result.max_age_0  %}
+                    <tr>
+                        <td>Cache-Control does not contain one of the following directives: no-cache, must-revalidate, max-age=0 </td>
+                        <td>Set Cache-Control to private, no-cache, no-store, must-revalidate, max-age=0</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if not results.cache_control_result.pragma_no_cache %}
+                    <tr>
+                        <td>Pragma is not set to no-cache</td>
+                        <td>Set Pragma to no-cache</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.third_party_libs_result.third_party_libs %}
+                    <tr>
+                        <td>Third Party JavaScript Libraries were detected</td>
+                        <td>Keep them up-to-date to stay safe from known vulnerabilities</td>
+                        <td>Info</td>
+                    </tr>
+                {% endif %}
+                {% if results.leaking_server_software_info_result.server_header_contains_version %}
+                    <tr>
+                        <td>Server header contains version information</td>
+                        <td>Remove Server header</td>
+                        <td>High</td>
+                    </tr>
+                {% elif results.leaking_server_software_info_result.server_header_present %}
+                    <tr>
+                        <td>Server header unnecessarily present</td>
+                        <td>Remove Server header</td>
+                        <td>Medium</td>
+                    </tr>
+                {% endif %}
+                {% if results.leaking_server_software_info_result.x_powered_by_header_contains_version %}
+                    <tr>
+                        <td>X-Powered-By header contains version information</td>
+                        <td>Remove X-Powered-By header</td>
+                        <td>High</td>
+                    </tr>
+                {% elif results.leaking_server_software_info_result.x_powered_by_header_present %}
+                    <tr>
+                        <td>X-Powered-By header unnecessarily present</td>
+                        <td>Remove X-Powered-By header</td>
+                        <td>Medium</td>
+                    </tr>
+                {% endif %}
+                {% if results.mixed_content_result.outgoing_http_request_urls %}
+                    <tr>
+                        <td>Mixed content detected</td>
+                        <td>Make sure all outgoing traffic is pointed to HTTPS sites</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if 'upgrade-insecure-requests' not in results.csp_result.csp %}
+                    <tr>
+                        <td>No upgrade-insecure-requests directive in CSP</td>
+                        <td>Include upgrade-insecure-requests directive in CSP to prevent mixed content</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.sri_result.unprotected_cors_script_and_link_tags %}
+                    <tr>
+                        <td>Some cross origin resources are not protected by Subresource Integrity checks</td>
+                        <td>Make sure all cross origin resources are protected by Subresource Integrity checks</td>
+                        <td>High</td>
+                    </tr>
+                {% endif %}
+                {% if scores['sri_score'] == 0 or scores['sri_score'] == 20 or scores['sri_score'] == 90 %}
+                    <tr>
+                        <td>No require-sri-for directive in CSP</td>
+                        <td>Include require-sri-for directive in CSP to force Subresource Integrity checks</td>
+                        <td>Low</td>
+                    </tr>
+                {% endif %}
+                {% if results.cross_domain_existence_result.query_to_non_existing_domain %}
+                    <tr>
+                        <td>Some cross domain requests point to expired domains</td>
+                        <td>Make sure all cross domain requests point to existing domains</td>
+                        <td>Critical</td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
 </div>
 {% if results.third_party_libs_result.third_party_libs %}
 <hr>
-<div class="card border">
-    <div class="card-header" data-toggle="collapse" data-target="#info">Third Party Libraries</div>
-    <div class="card-body collapse show" id="info">
+<div class="card border-info">
+    <div class="card-header" data-toggle="collapse" data-target="#libs">Detected Third Party Libraries</div>
+    <div class="card-body collapse show" id="libs">
         <table class="table">
             <thead>
                 <tr>
@@ -181,4 +375,104 @@ Results
     </div>
 </div>
 {% endif %}
+<hr>
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#metrics">Metrics</div>
+    <div class="card-body collapse show" id="metrics">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>HTTP Redirection</td>
+                    <td>{{ score_badge(scores['http_redirection_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>TLS</td>
+                    <td>{{ score_badge(scores['tls_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cross Domain Existence</td>
+                    <td>{{ score_badge(scores['cross_domain_existence_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>HTTP Strict Transport Security</td>
+                    <td>{{ score_badge(scores['hsts_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-Content-Type-Options</td>
+                    <td>{{ score_badge(scores['x_content_type_options_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-XSS-Protection</td>
+                    <td>{{ score_badge(scores['x_xss_protection_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-Frame-Options</td>
+                    <td>{{ score_badge(scores['x_frame_options_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cookie Security</td>
+                    <td>{{ score_badge(scores['cookie_security_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cross Origin Resource Sharing (Incoming)</td>
+                    <td>{{ score_badge(scores['cors_policy_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Cross Origin Resource Sharing (Outgoing)</td>
+                    <td>{{ score_badge(scores['cors_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Content Security Policy</td>
+                    <td>{{ score_badge(scores['csp_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Referrer-Policy</td>
+                    <td>{{ score_badge(scores['referrer_policy_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cache-Control</td>
+                    <td>{{ score_badge(scores['cache_control_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Leaking Server Software Info Score</td>
+                    <td>{{ score_badge(scores['leaking_server_software_info_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Mixed Content</td>
+                    <td>{{ score_badge(scores['mixed_content_score']) }}</td>
+                </tr>
+                 <tr>
+                    <td>Subresource Integrity</td>
+                    <td>{{ score_badge(scores['sri_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>X-Download-Options</td>
+                    <td>{{ score_badge(scores['x_download_options_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>HTTP Public Key Pinning <span class="badge badge-info">Bonus</span></td>
+                    <td>{{ score_badge(scores['hpkp_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Expect-CT <span class="badge badge-info">Bonus</span></td>
+                    <td>{{ score_badge(scores['expect_ct_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Cross-Site Request Forgery Tokens <span class="badge badge-info">Bonus</span></td>
+                    <td>{{ score_badge(scores['csrf_score']) }}</td>
+                </tr>
+                <tr>
+                    <td>Third Party Libraries</td>
+                    <td><span class="badge badge-info">Info</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock content %}

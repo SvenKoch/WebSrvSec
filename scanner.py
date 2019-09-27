@@ -286,8 +286,8 @@ def analyze_cors_policy(response_headers, response_url):
     clientaccesspolicy_xml_present = False
     if access_control_allow_origin_header and access_control_allow_origin_header == '*':
         lazy_wildcard = True
-    if x_permitted_cross_domain_policies_header \
-            and x_permitted_cross_domain_policies_header.casefold() == 'none'.casefold():
+    if not x_permitted_cross_domain_policies_header \
+            or x_permitted_cross_domain_policies_header.casefold() == 'none'.casefold():
         x_permitted_cross_domain_policies_set_to_none = True
 
     hostname = urlparse(response_url).hostname
