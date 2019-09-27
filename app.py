@@ -75,7 +75,7 @@ def results(results_id, res=None):
         'cross_domain_existence_score': scorer.cross_domain_existence_score(),
         'sri_score': scorer.sri_score(),
         'mixed_content_score': scorer.mixed_content_score(),
-        'up_to_date_server_software_score': scorer.up_to_date_server_software_score(),
+        'leaking_server_software_info_score': scorer.leaking_server_software_info_score(),
         'up_to_date_third_party_lib_score': scorer.up_to_date_third_party_lib_score(),
         'cache_control_score': scorer.cache_control_score(),
         'referrer_policy_score': scorer.referrer_policy_score(),

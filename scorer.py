@@ -7,9 +7,19 @@ class Scorer:
     def __init__(self, result: results.SuccessResult):
         self.result = result
 
-    def up_to_date_server_software_score(self):
-        # TODO
-        return -1
+    # return 100 if no Server or X-Powered-By header were sent
+    # return 60 if Server or X-Powered-By header were set
+    # return 0 if any version number of server software was leaked
+    def leaking_server_software_info_score(self):
+        if self.result.leaking_server_software_info_result.server_header_contains_version:
+            return 0
+        if self.result.leaking_server_software_info_result.x_powered_by_header_contains_version:
+            return 0
+        if self.result.leaking_server_software_info_result.server_header_present:
+            return 60
+        if self.result.leaking_server_software_info_result.x_powered_by_header_present:
+            return 60
+        return 100
 
     def up_to_date_third_party_lib_score(self):
         # TODO
@@ -303,7 +313,7 @@ class Scorer:
             'cross_domain_existence': 5,
             'sri': 1,
             'mixed_content': 1,
-            'up_to_date_server_software': 0,
+            'leaking_server_software_info': 1,
             'up_to_date_third_party_lib': 0,
             'cache_control': 1,
             'referrer_policy': 1,
@@ -339,7 +349,7 @@ class Scorer:
                 + self.referrer_policy_score() * mandatory_weights['referrer_policy'] \
                 + self.cache_control_score() * mandatory_weights['cache_control'] \
                 + self.up_to_date_third_party_lib_score() * mandatory_weights['up_to_date_third_party_lib'] \
-                + self.up_to_date_server_software_score() * mandatory_weights['up_to_date_server_software'] \
+                + self.leaking_server_software_info_score() * mandatory_weights['leaking_server_software_info'] \
                 + self.mixed_content_score() * mandatory_weights['mixed_content'] \
                 + self.sri_score() * mandatory_weights['sri'] \
                 + self.cross_domain_existence_score() * mandatory_weights['cross_domain_existence']

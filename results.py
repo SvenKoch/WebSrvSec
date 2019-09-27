@@ -22,8 +22,11 @@ class MixedContentResult:
 
 
 @dataclass(frozen=True)
-class UpToDateServerSoftwareResult:
-    pass
+class LeakingServerSoftwareInfoResult:
+    server_header_present: bool
+    server_header_contains_version: bool
+    x_powered_by_header_present: bool
+    x_powered_by_header_contains_version: bool
 
 
 @dataclass(frozen=True)
@@ -164,7 +167,7 @@ class SuccessResult(Result):
     cross_domain_existence_result: CrossDomainExistenceResult
     sri_result: SriResult
     mixed_content_result: MixedContentResult
-    up_to_date_server_software_result: UpToDateServerSoftwareResult
+    leaking_server_software_info_result: LeakingServerSoftwareInfoResult
     up_to_date_third_party_lib_result: UpToDateThirdPartyLibResult
     cache_control_result: CacheControlResult
     referrer_policy_result: ReferrerPolicyResult

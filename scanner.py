@@ -18,7 +18,7 @@ from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv3
     Tlsv11ScanCommand, Tlsv12ScanCommand, Tlsv13ScanCommand
 from sslyze.server_connectivity_tester import ServerConnectivityTester, ServerConnectivityError
 
-from results import CrossDomainExistenceResult, SriResult, MixedContentResult, UpToDateServerSoftwareResult, \
+from results import CrossDomainExistenceResult, SriResult, MixedContentResult, LeakingServerSoftwareInfoResult, \
     UpToDateThirdPartyLibResult, SuccessResult, CacheControlResult, ReferrerPolicyResult, CsrfResult, Severity, \
     CspResult, \
     CorsResult, CorsPolicyResult, CookieSecurityResult, ExpectCtResult, XDownloadOptionsResult, XFrameOptionsResult, \
@@ -81,9 +81,25 @@ def analyze_up_to_date_third_party_libs():
     return UpToDateThirdPartyLibResult()
 
 
-def analyze_up_to_date_server_software():
-    # TODO WhatsWeb Scan
-    return UpToDateServerSoftwareResult()
+def analyze_leaking_server_software_info(response_headers):
+    server_header = response_headers.get('Server')
+    x_powered_by_header = response_headers.get('X-Powered-By')
+    server_header_present = False
+    server_header_contains_version = False
+    x_powered_by_header_present = False
+    x_powered_by_header_contains_version = False
+    if server_header:
+        server_header_present = True
+        if re.search(r'/\d', server_header, re.I):
+            server_header_contains_version = True
+    if x_powered_by_header:
+        x_powered_by_header_present = True
+        if re.search(r'/\d', x_powered_by_header, re.I):
+            x_powered_by_header_contains_version = True
+    return LeakingServerSoftwareInfoResult(server_header_present=server_header_present,
+                                           server_header_contains_version=server_header_contains_version,
+                                           x_powered_by_header_present=x_powered_by_header_present,
+                                           x_powered_by_header_contains_version=x_powered_by_header_contains_version)
 
 
 def analyze_cache_control(response_headers, soup):
@@ -592,7 +608,7 @@ def analyze(site):
         cors_result = analyze_cors(soup, har_entries)
         referrer_policy_result = analyze_referrer_policy(response_headers, response_url, soup, har_entries)
         cache_control_result = analyze_cache_control(response_headers, soup)
-        up_to_date_server_software_result = analyze_up_to_date_server_software()
+        leaking_server_software_info_result = analyze_leaking_server_software_info(response_headers)
         # phase 4
         mixed_content_result = analyze_mixed_content(har_entries)
         sri_result = analyze_sri_protection(soup)
@@ -617,7 +633,7 @@ def analyze(site):
                                csrf_result=csrf_result,
                                referrer_policy_result=referrer_policy_result,
                                cache_control_result=cache_control_result,
-                               up_to_date_server_software_result=up_to_date_server_software_result,
+                               leaking_server_software_info_result=leaking_server_software_info_result,
                                mixed_content_result=mixed_content_result,
                                sri_result=sri_result,
                                cross_domain_existence_result=cross_domain_existence_result,
