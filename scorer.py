@@ -21,9 +21,10 @@ class Scorer:
             return 60
         return 100
 
-    def up_to_date_third_party_lib_score(self):
-        # TODO
-        return -1
+    # return 100 as this is just info for now
+    # make sure it is weighted with 0
+    def third_party_libs_score(self):
+        return 100
 
     # return 0 if any cross-domain requests query non-existing domains
     # return 100 otherwise
@@ -314,7 +315,7 @@ class Scorer:
             'sri': 1,
             'mixed_content': 1,
             'leaking_server_software_info': 1,
-            'up_to_date_third_party_lib': 0,
+            'third_party_libs': 0,
             'cache_control': 1,
             'referrer_policy': 1,
             'csp': 1,
@@ -348,7 +349,7 @@ class Scorer:
                 + self.csp_score() * mandatory_weights['csp'] \
                 + self.referrer_policy_score() * mandatory_weights['referrer_policy'] \
                 + self.cache_control_score() * mandatory_weights['cache_control'] \
-                + self.up_to_date_third_party_lib_score() * mandatory_weights['up_to_date_third_party_lib'] \
+                + self.third_party_libs_score() * mandatory_weights['third_party_libs'] \
                 + self.leaking_server_software_info_score() * mandatory_weights['leaking_server_software_info'] \
                 + self.mixed_content_score() * mandatory_weights['mixed_content'] \
                 + self.sri_score() * mandatory_weights['sri'] \

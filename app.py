@@ -76,7 +76,7 @@ def results(results_id, res=None):
         'sri_score': scorer.sri_score(),
         'mixed_content_score': scorer.mixed_content_score(),
         'leaking_server_software_info_score': scorer.leaking_server_software_info_score(),
-        'up_to_date_third_party_lib_score': scorer.up_to_date_third_party_lib_score(),
+        'third_party_libs_score': scorer.third_party_libs_score(),
         'cache_control_score': scorer.cache_control_score(),
         'referrer_policy_score': scorer.referrer_policy_score(),
         'csrf_score': scorer.csrf_score(),

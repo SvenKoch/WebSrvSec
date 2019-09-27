@@ -1,7 +1,7 @@
 import datetime
 import enum
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict
 
 
 @dataclass(frozen=True)
@@ -30,8 +30,8 @@ class LeakingServerSoftwareInfoResult:
 
 
 @dataclass(frozen=True)
-class UpToDateThirdPartyLibResult:
-    pass
+class ThirdPartyLibsResult:
+    third_party_libs: List[Dict[str, str]]
 
 
 @dataclass(frozen=True)
@@ -168,7 +168,7 @@ class SuccessResult(Result):
     sri_result: SriResult
     mixed_content_result: MixedContentResult
     leaking_server_software_info_result: LeakingServerSoftwareInfoResult
-    up_to_date_third_party_lib_result: UpToDateThirdPartyLibResult
+    third_party_libs_result: ThirdPartyLibsResult
     cache_control_result: CacheControlResult
     referrer_policy_result: ReferrerPolicyResult
     csrf_result: CsrfResult

@@ -19,7 +19,7 @@ from sslyze.plugins.openssl_cipher_suites_plugin import Sslv20ScanCommand, Sslv3
 from sslyze.server_connectivity_tester import ServerConnectivityTester, ServerConnectivityError
 
 from results import CrossDomainExistenceResult, SriResult, MixedContentResult, LeakingServerSoftwareInfoResult, \
-    UpToDateThirdPartyLibResult, SuccessResult, CacheControlResult, ReferrerPolicyResult, CsrfResult, Severity, \
+    ThirdPartyLibsResult, SuccessResult, CacheControlResult, ReferrerPolicyResult, CsrfResult, Severity, \
     CspResult, \
     CorsResult, CorsPolicyResult, CookieSecurityResult, ExpectCtResult, XDownloadOptionsResult, XFrameOptionsResult, \
     XXssProtectionResult, XContentTypeOptionsResult, HpkpResult, HstsResult, TlsResult, HttpRedirectionResult, \
@@ -76,9 +76,11 @@ def analyze_mixed_content(har_entries):
     return MixedContentResult(outgoing_http_request_urls=outgoing_http_request_urls)
 
 
-def analyze_up_to_date_third_party_libs():
-    # TODO WhatsWeb Scan
-    return UpToDateThirdPartyLibResult()
+def analyze_third_party_libs(third_party_libs):
+    for lib in third_party_libs:
+        if lib['version'] is None:
+            lib['version'] = 'unknown'
+    return ThirdPartyLibsResult(third_party_libs=third_party_libs)
 
 
 def analyze_leaking_server_software_info(response_headers):
@@ -588,6 +590,9 @@ def analyze(site):
         proxy.new_har()
         driver.get(f'https://{redirected_site}')
         har_entries = proxy.har['log']['entries']
+        with open('libraries.js') as f:
+            javascript = f.read()
+        third_party_libs = driver.execute_script(javascript)
         proxy.close()
         server.stop()
         driver.quit()
@@ -613,7 +618,7 @@ def analyze(site):
         mixed_content_result = analyze_mixed_content(har_entries)
         sri_result = analyze_sri_protection(soup)
         cross_domain_existence_result = analyze_cross_domain_existence(response_url, har_entries)
-        up_to_date_third_party_lib_result = analyze_up_to_date_third_party_libs()
+        third_party_libs_result = analyze_third_party_libs(third_party_libs)
 
         result = SuccessResult(site=site,
                                timestamp=datetime.datetime.now(),
@@ -637,7 +642,7 @@ def analyze(site):
                                mixed_content_result=mixed_content_result,
                                sri_result=sri_result,
                                cross_domain_existence_result=cross_domain_existence_result,
-                               up_to_date_third_party_lib_result=up_to_date_third_party_lib_result
+                               third_party_libs_result=third_party_libs_result
                                )
     except Exception as e:
         result = ErrorResult(site=site, timestamp=datetime.datetime.now(), error_msg=str(e))

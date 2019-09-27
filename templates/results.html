@@ -138,8 +138,8 @@ Results
         <table class="table">
             <tbody>
                 <tr>
-                    <td>Up To Date Third Party Libraries</td>
-                    <td>{{ score_badge(scores['up_to_date_third_party_lib_score']) }}</td>
+                    <td>Third Party Libraries</td>
+                    <td><span class="badge badge-info">Info</span></td>
                 </tr>
                 <tr>
                     <td>Mixed Content</td>
@@ -157,4 +157,28 @@ Results
         </table>
     </div>
 </div>
+{% if results.third_party_libs_result.third_party_libs %}
+<hr>
+<div class="card border">
+    <div class="card-header" data-toggle="collapse" data-target="#info">Third Party Libraries</div>
+    <div class="card-body collapse show" id="info">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Library</th>
+                    <th>Version</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lib in results.third_party_libs_result.third_party_libs %}
+                <tr>
+                    <td> {{ lib['name'] }} </td>
+                    <td> {{ lib['version'] }} </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock content %}
