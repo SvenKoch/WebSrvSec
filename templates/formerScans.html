@@ -7,12 +7,14 @@ Former Scans
 {% block content %}
 {% if site %}
 <h1>Latest Scans for {{ site }}</h1>
-<form id="scanForm" method="post" action="{{ url_for('scan') }}" name="scan">
-    <input type="hidden" name="rescan" value="1">
-    <input type="hidden" name="address" value="{{ site }}">
-    <button id="scanBtn" class="btn btn-primary btn-block" type="submit">Rescan</button>
-    <button id="loadBtn" class="btn btn-block" disabled hidden><span class="spinner-border"></span></button>
-</form>
+<p>
+    <form id="scanForm" method="post" action="{{ url_for('scan') }}" name="scan">
+        <input type="hidden" name="rescan" value="1">
+        <input type="hidden" name="address" value="{{ site }}">
+        <button id="scanBtn" class="btn btn-primary btn-block" type="submit">Rescan</button>
+        <button id="loadBtn" class="btn btn-block" disabled hidden><span class="spinner-border"></span></button>
+    </form>
+</p>
 {% else %}
 <h1>Latest Scans</h1>
 {% endif %}

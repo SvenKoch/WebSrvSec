@@ -366,8 +366,6 @@ class Scorer:
             sum_weights += bonus_weights['csrf']
             avg_score = score / sum_weights
 
-        if self.tls_score() <= 20:
-            return min(self.tls_score(), int(avg_score))
         return int(avg_score)
 
     @classmethod

@@ -25,6 +25,9 @@ from results import CrossDomainExistenceResult, SriResult, MixedContentResult, L
     XXssProtectionResult, XContentTypeOptionsResult, HpkpResult, HstsResult, TlsResult, HttpRedirectionResult, \
     ErrorResult
 
+USER_AGENT_CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36'
+USER_AGENT_IE = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
+
 
 def analyze_cross_domain_existence(response_url, har_entries):
     hostname = urlparse(response_url).hostname
@@ -253,7 +256,10 @@ def analyze_csp(hostname):
     elif 'data-tooltip="Possible medium severity finding"' in evaluated_csp_html:
         highest_severity_finding = Severity.PossiblyMedium
 
-    response = requests.post('https://csp-evaluator.withgoogle.com/getCSP', data={'url': f'https://{hostname}'})
+    response = requests.post('https://csp-evaluator.withgoogle.com/getCSP',
+                             data={'url': f'https://{hostname}'},
+                             timeout=10,
+                             headers={'User-Agent': USER_AGENT_CHROME})
     csp = response.json()['csp'].split(';')
     csp = [re.sub(r'\s+', ' ', x) for x in csp]
 
@@ -291,8 +297,12 @@ def analyze_cors_policy(response_headers, response_url):
         x_permitted_cross_domain_policies_set_to_none = True
 
     hostname = urlparse(response_url).hostname
-    crossdomain_xml = requests.get(f'https://{hostname}/crossdomain.xml')
-    clientaccesspolicy_xml = requests.get(f'https://{hostname}/clientaccesspolicy.xml')
+    crossdomain_xml = requests.get(f'https://{hostname}/crossdomain.xml',
+                                   timeout=10,
+                                   headers={'User-Agent': USER_AGENT_CHROME})
+    clientaccesspolicy_xml = requests.get(f'https://{hostname}/clientaccesspolicy.xml',
+                                          timeout=10,
+                                          headers={'User-Agent': USER_AGENT_CHROME})
 
     if crossdomain_xml.status_code == 200:
         crossdomain_xml_present = True
@@ -413,7 +423,7 @@ def analyze_hpkp(response_headers):
 
 
 def analyze_hsts(response_headers):
-    hsts_header = response_headers['Strict-Transport-Security']
+    hsts_header = response_headers.get('Strict-Transport-Security')
     if hsts_header is None:
         return HstsResult(hsts_header_present=False, max_age=0, include_sub_domains=False, preload=False)
 
@@ -564,9 +574,7 @@ def analyze_http_redirection(response):
 def analyze(site):
     try:
         site = re.sub(r'^https?://', '', site)
-        user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36'
-        ie_user_agent = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
-        response = requests.get(f'http://{site}', timeout=10, headers={'User-Agent': user_agent})
+        response = requests.get(f'http://{site}', timeout=10, headers={'User-Agent': USER_AGENT_CHROME})
         redirected_hostname = urlparse(response.url).hostname
         redirected_site = re.sub(r'^https?://', '', response.url)
         # phase 0
@@ -574,8 +582,8 @@ def analyze(site):
         # phase 1
         tls_result = analyze_tls(redirected_hostname)
         # phase 2
-        response = requests.get(f'https://{redirected_site}', timeout=10, headers={'User-Agent': user_agent})
-        response_ie = requests.get(f'https://{redirected_site}', timeout=10, headers={'User-Agent': ie_user_agent})
+        response = requests.get(f'https://{redirected_site}', timeout=10, headers={'User-Agent': USER_AGENT_CHROME})
+        response_ie = requests.get(f'https://{redirected_site}', timeout=10, headers={'User-Agent': USER_AGENT_IE})
         response_headers = response.headers
         response_cookies = response.cookies
         response_url = response.url

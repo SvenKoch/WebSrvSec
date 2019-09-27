@@ -77,13 +77,13 @@ Results
                 {% if results.tls_result.weak_tls10_or_tls11_accepted %}
                 <tr>
                     <td>Weak cipher suites for TLS 1.0 or 1.1 accepted</td>
-                    <td>Disable support for weak cipher suites</td>
+                    <td>Disable support for weak cipher suites (NULL, MD5, RC4, 3DES, EXPORT, ANON)</td>
                     <td>Critical</td>
                 </tr>
                 {% endif %}
                 {% if results.tls_result.tls10_or_tls11_accepted %}
                 <tr>
-                    <td>Soon outdated TLS 1.0 or 1.1</td>
+                    <td>Soon outdated TLS 1.0 or 1.1 accepted</td>
                     <td>Only support TLS 1.2+</td>
                     <td>Low</td>
                 </tr>
