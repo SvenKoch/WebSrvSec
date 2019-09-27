@@ -148,7 +148,7 @@ def analyze_cache_control(response_headers, soup):
             must_revalidate = True
         if 'max-age=0'.casefold() in cache_control.casefold():
             max_age_0 = True
-    if pragma and pragma.casefold() == 'no-cache'.casefold():
+    if pragma and 'no-cache'.casefold() in pragma.casefold():
         pragma_no_cache = True
 
     return CacheControlResult(private_directive=private_directive,

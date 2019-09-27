@@ -152,17 +152,10 @@ Results
                         <td>Low</td>
                     </tr>
                 {% endif %}
-                {% if not results.cookie_security_result.secure %}
+                {% if not results.cookie_security_result.secure or not results.cookie_security_result.http_only %}
                     <tr>
-                        <td>Cookie does not have Secure flag set</td>
-                        <td>Set Secure flag for all cookies</td>
-                        <td>High</td>
-                    </tr>
-                {% endif %}
-                {% if not results.cookie_security_result.http_only %}
-                    <tr>
-                        <td>Cookie does not have HttpOnly flag set</td>
-                        <td>Set HttpOnly flag for all cookies</td>
+                        <td>Cookie missing Secure or HttpOnly flag</td>
+                        <td>Set Secure and HttpOnly flags for all cookies</td>
                         <td>High</td>
                     </tr>
                 {% endif %}

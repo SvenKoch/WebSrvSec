@@ -23,7 +23,12 @@ def save_results(res):
 
 
 def load_results(results_id):
-    doc = collection.find_one({'_id': ObjectId(results_id)})
+    try:
+        doc = collection.find_one({'_id': ObjectId(results_id)})
+    except bson.errors.InvalidId:
+        return None
+    if not doc:
+        return None
     return jsons.load(doc, SuccessResult)
 
 
@@ -65,9 +70,8 @@ def former_scans():
 @app.route('/results/<string:results_id>')
 def results(results_id, res=None):
     if not res:
-        try:
-            res = load_results(results_id)
-        except bson.errors.InvalidId:
+        res = load_results(results_id)
+        if not res:
             abort(404)
     scorer = Scorer(res)
     scores = {
