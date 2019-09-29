@@ -1,4 +1,5 @@
 import datetime
+import os
 import re
 import time
 from urllib.parse import urlparse
@@ -25,6 +26,7 @@ from results import CrossDomainExistenceResult, SriResult, MixedContentResult, L
     XXssProtectionResult, XContentTypeOptionsResult, HpkpResult, HstsResult, TlsResult, HttpRedirectionResult, \
     ErrorResult
 
+BROWSERMOB_PROXY_PATH = os.path.join('browsermob-proxy-2.1.4', 'bin', 'browsermob-proxy')
 USER_AGENT_CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36'
 USER_AGENT_IE = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
 
@@ -589,7 +591,7 @@ def analyze(site):
         response_url = response.url
         soup = BeautifulSoup(response.text, features='html.parser')
 
-        server = Server("browsermob-proxy-2.1.4\\bin\\browsermob-proxy")
+        server = Server(BROWSERMOB_PROXY_PATH)
         server.start()
         proxy = server.create_proxy()
         options = webdriver.ChromeOptions()
