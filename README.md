@@ -3,7 +3,7 @@
 - Download chromedriver and matching Chrome version
 - Windows only: include chromedriver binary in project directory
 - Linux only: include chromedriver location in PATH
-- Download Browsermob-Proxy and include in project directory (if neccessary adjust path in `app.py`)
+- Download Browsermob-Proxy and include in project directory (if neccessary adjust path in `scanner.py`)
 - Create virtual environment with Python 3.7 or higher
 - Install requirements from requirements.txt in virtual environment
 
