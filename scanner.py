@@ -226,7 +226,9 @@ def analyze_csrf(response_cookies, soup):
 def analyze_csp(hostname):
     highest_severity_finding = Severity.AllGood
     csp = []
-    driver = webdriver.Chrome()
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    driver = webdriver.Chrome(options=options)
     driver.get('https://csp-evaluator.withgoogle.com')
     textarea = driver.find_element_by_tag_name('textarea')
     driver.find_element_by_class_name('csp_input_box').click()
@@ -596,6 +598,7 @@ def analyze(site):
         proxy = server.create_proxy()
         options = webdriver.ChromeOptions()
         options.add_argument(f'--proxy-server={proxy.proxy}')
+        options.add_argument('--headless')
         driver = webdriver.Chrome(options=options)
         proxy.new_har()
         driver.get(f'https://{redirected_site}')
