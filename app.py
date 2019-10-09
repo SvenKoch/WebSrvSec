@@ -14,7 +14,7 @@ DATABASE_NAME = 'websrvsec'
 COLLECTION_NAME = 'results'
 
 app = Flask(__name__)
-collection = pymongo.MongoClient().get_database(name=DATABASE_NAME).get_collection(name=COLLECTION_NAME)
+collection = pymongo.MongoClient(connect=False).get_database(name=DATABASE_NAME).get_collection(name=COLLECTION_NAME)
 
 
 def save_results(res):
