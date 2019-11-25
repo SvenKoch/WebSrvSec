@@ -41,6 +41,8 @@ def add_security_headers(resp):
     resp.headers['X-Download-Options'] = 'noopen'
     resp.headers['Content-Security-Policy'] = 'default-src \'none\';img-src \'self\';script-src \'strict-dynamic\' ' \
                                               '\'unsafe-inline\' ' \
+                                              '\'sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=\' ' \
+                                              '\'sha256-fzFFyH01cBVPYzl16KT40wqjhgPtq6FFUB6ckN2+GGw=\' ' \
                                               '\'sha256-Uf0IDd1sftFKJct8/OdMNg95pXgV25RLHWU+ktB4QeY=\' http: ' \
                                               'https:;style-src \'self\';base-uri \'none\';require-sri-for script ' \
                                               'style;upgrade-insecure-requests;'
