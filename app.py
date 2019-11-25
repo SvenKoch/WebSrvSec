@@ -39,9 +39,11 @@ def add_security_headers(resp):
     resp.headers['X-XSS-Protection'] = '1'
     resp.headers['X-Frame-Options'] = 'deny'
     resp.headers['X-Download-Options'] = 'noopen'
-    resp.headers['Content-Security-Policy'] = 'default-src \'none\';img-src \'self\';script-src \'self\';' \
-                                              + 'style-src \'self\';base-uri \'none\';require-sri-for script style;' \
-                                              + 'upgrade-insecure-requests;'
+    resp.headers['Content-Security-Policy'] = 'default-src \'none\';img-src \'self\';script-src \'strict-dynamic\' ' \
+                                              '\'unsafe-inline\' ' \
+                                              '\'sha256-Uf0IDd1sftFKJct8/OdMNg95pXgV25RLHWU+ktB4QeY=\' http: ' \
+                                              'https:;style-src \'self\';base-uri \'none\';require-sri-for script ' \
+                                              'style;upgrade-insecure-requests;'
     resp.headers['Referrer-Policy'] = 'no-referrer'
     resp.headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
