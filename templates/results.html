@@ -232,7 +232,7 @@ Results
                             <td>High</td>
                         </tr>
                     {% else %}
-                        {% if results.csp_result.highest_severity_finding != "AllGood" %}
+                        {% if results.csp_result.highest_severity_finding|string() != 'Severity.AllGood' %}
                             <tr>
                                 <td>Negative findings when evaluating Content Security Policy</td>
                                 <td>Use the <a href="https://csp-evaluator.withgoogle.com">CSP evaluator</a> to get suggestions</td>

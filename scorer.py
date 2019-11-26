@@ -343,6 +343,7 @@ class Scorer:
                 + self.x_download_options_score() * mandatory_weights['x_download_options'] \
                 + self.cookie_security_score() * mandatory_weights['cookie_security'] \
                 + self.cors_policy_score() * mandatory_weights['cors_policy'] \
+                + self.cors_score() * mandatory_weights['cors'] \
                 + self.csp_score() * mandatory_weights['csp'] \
                 + self.referrer_policy_score() * mandatory_weights['referrer_policy'] \
                 + self.cache_control_score() * mandatory_weights['cache_control'] \
