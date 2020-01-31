@@ -11,3 +11,6 @@
 - Have MongoDB daemon (mongod) running
 - Activate virtual environment
 - run `python app.py`
+
+# Credits
+Third party lib detection by [Library Detector For Chrome](https://github.com/johnmichel/Library-Detector-for-Chrome)
