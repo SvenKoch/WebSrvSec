@@ -17,4 +17,4 @@ requests==2.21.0
 six==1.12.0
 sslyze==2.0.6
 tls-parser==1.2.1
-urllib3==1.24.2
+urllib3==1.26.5
